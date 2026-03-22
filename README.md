@@ -128,13 +128,4 @@ This project demonstrates how to build a production-style data pipeline focusing
 
 The pipeline successfully transforms raw data into structured, high-quality datasets ready for analytics. By leveraging DBT and Snowflake, it ensures efficient data processing, strong validation, and historical tracking—making it suitable for real-world analytical use cases.
 
----
 
-## 📎 Future Improvements
-
-* Add orchestration (Airflow)
-* Implement CI/CD for DBT workflows
-* Optimize using incremental models
-* Build dashboards for insights (Power BI / Tableau)
-
----
