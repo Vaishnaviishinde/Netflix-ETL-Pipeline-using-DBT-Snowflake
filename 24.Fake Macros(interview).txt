@@ -1,0 +1,399 @@
+24.Fake Macros(interview)
+
+---
+
+# 🔥 1. Surrogate Key Macro
+
+## Macro
+
+```sql
+{% macro generate_sk(columns) %}
+
+MD5(
+    CONCAT(
+        {% for col in columns %}
+            COALESCE(CAST({{ col }} AS STRING), '')
+            {% if not loop.last %}, '|' , {% endif %}
+        {% endfor %}
+    )
+)
+
+{% endmacro %}
+```
+
+---
+
+## Usage
+
+```sql
+SELECT
+    {{ generate_sk(['user_id','movie_id','tag']) }} AS row_key,
+    user_id,
+    movie_id,
+    tag
+FROM src_tags
+```
+
+---
+
+## Line-by-line explanation
+
+```sql
+{% macro generate_sk(columns) %}
+```
+
+→ define macro named `generate_sk`
+→ takes input = list of columns
+
+---
+
+```sql
+MD5(
+```
+
+→ creates a **hash value** (unique ID)
+
+---
+
+```sql
+CONCAT(
+```
+
+→ joins multiple columns into one string
+
+---
+
+```sql
+{% for col in columns %}
+```
+
+→ loop through each column in list
+
+---
+
+```sql
+COALESCE(CAST({{ col }} AS STRING), '')
+```
+
+→ convert column to string
+→ if NULL → replace with empty string
+
+---
+
+```sql
+{% if not loop.last %}, '|' , {% endif %}
+```
+
+→ add separator `|` between columns
+→ avoid adding after last column
+
+---
+
+```sql
+{% endfor %}
+```
+
+→ loop ends
+
+---
+
+```sql
+)
+)
+```
+
+→ close CONCAT and MD5
+
+---
+
+## Simple Example
+
+Input:
+
+```
+user_id = 1
+movie_id = 10
+tag = "action"
+```
+
+Step:
+
+```
+"1|10|action" → MD5 → unique hash
+```
+
+👉 Output = `row_key`
+
+---
+
+# 🔥 2. Incremental Filter Macro
+
+## Macro
+
+```sql
+{% macro incremental_filter(column_name) %}
+
+{% if is_incremental() %}
+    AND {{ column_name }} > (
+        SELECT MAX({{ column_name }}) FROM {{ this }}
+    )
+{% endif %}
+
+{% endmacro %}
+```
+
+---
+
+## Usage
+
+```sql
+SELECT *
+FROM src_ratings
+WHERE rating IS NOT NULL
+{{ incremental_filter('rating_timestamp') }}
+```
+
+---
+
+## Line-by-line explanation
+
+```sql
+{% macro incremental_filter(column_name) %}
+```
+
+→ macro with input column
+
+---
+
+```sql
+{% if is_incremental() %}
+```
+
+→ runs ONLY if model is incremental
+
+---
+
+```sql
+AND {{ column_name }} >
+```
+
+→ filter condition
+
+---
+
+```sql
+SELECT MAX({{ column_name }}) FROM {{ this }}
+```
+
+→ get latest timestamp from target table
+
+---
+
+```sql
+{{ this }}
+```
+
+→ current table (fct_ratings)
+
+---
+
+```sql
+{% endif %}
+```
+
+→ end condition
+
+---
+
+## Simple Example
+
+Existing table:
+
+```
+max timestamp = 5 PM
+```
+
+New data:
+
+```
+6 PM, 7 PM
+```
+
+👉 Only 6 & 7 PM rows inserted
+
+---
+
+# 🔥 3. Valid Rating Macro
+
+## Macro
+
+```sql
+{% macro valid_rating(column) %}
+
+{{ column }} IS NOT NULL
+AND {{ column }} >= 0
+AND {{ column }} <= 5
+
+{% endmacro %}
+```
+
+---
+
+## Usage
+
+```sql
+SELECT *
+FROM src_ratings
+WHERE {{ valid_rating('rating') }}
+```
+
+---
+
+## Line-by-line explanation
+
+```sql
+{% macro valid_rating(column) %}
+```
+
+→ input = column name
+
+---
+
+```sql
+{{ column }} IS NOT NULL
+```
+
+→ remove null values
+
+---
+
+```sql
+AND {{ column }} >= 0
+```
+
+→ rating must be ≥ 0
+
+---
+
+```sql
+AND {{ column }} <= 5
+```
+
+→ rating must be ≤ 5
+
+---
+
+## Simple Example
+
+| rating | result |
+| ------ | ------ |
+| 4      | keep   |
+| NULL   | remove |
+| -1     | remove |
+| 7      | remove |
+
+---
+
+# 🔥 4. Clean Columns Macro
+
+## Macro
+
+```sql
+{% macro select_clean_columns(columns) %}
+
+{% for col in columns %}
+    TRIM({{ col }}) AS {{ col }}{% if not loop.last %}, {% endif %}
+{% endfor %}
+
+{% endmacro %}
+```
+
+---
+
+## Usage
+
+```sql
+SELECT
+    {{ select_clean_columns(['movie_title','genre']) }}
+FROM src_movies
+```
+
+---
+
+## Line-by-line explanation
+
+```sql
+{% macro select_clean_columns(columns) %}
+```
+
+→ takes list of columns
+
+---
+
+```sql
+{% for col in columns %}
+```
+
+→ loop through columns
+
+---
+
+```sql
+TRIM({{ col }}) AS {{ col }}
+```
+
+→ remove spaces
+→ keep same column name
+
+---
+
+```sql
+{% if not loop.last %}, {% endif %}
+```
+
+→ add comma except last
+
+---
+
+```sql
+{% endfor %}
+```
+
+→ loop ends
+
+---
+
+## Simple Example
+
+Input:
+
+```
+"  Avengers  "
+```
+
+Output:
+
+```
+"Avengers"
+```
+
+---
+
+# 🧠 Final Understanding (VERY IMPORTANT)
+
+| Macro                | What it does        |
+| -------------------- | ------------------- |
+| generate_sk          | creates unique ID   |
+| incremental_filter   | loads only new data |
+| valid_rating         | filters bad data    |
+| select_clean_columns | cleans text columns |
+
+---
+
+# 💡 Easy Way to Think
+
+* `{% %}` → logic (loop, if)
+* `{{ }}` → print value in SQL
+
+---
+

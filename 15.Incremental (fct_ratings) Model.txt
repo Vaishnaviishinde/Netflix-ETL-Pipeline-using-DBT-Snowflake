@@ -1,0 +1,296 @@
+15.Incremental (fct_ratings) Model
+
+### 1. What is an Incremental Model
+
+Normally when DBT runs a model with `table` materialization:
+
+* It **recreates the whole table every run**.
+
+Example:
+
+```
+Run 1 → load 10M rows  
+Run 2 → again process 10M rows
+```
+
+This is **slow and expensive**.
+
+Incremental models solve this by:
+
+* **Processing only new data added after the last run.**
+
+So instead of rebuilding everything:
+
+```
+Old table → 10M rows  
+New data → 100 rows  
+
+Incremental run → add only 100 rows
+```
+
+---
+
+# 2. Config block at the top
+
+```sql
+{{
+  config(
+    materialized = 'incremental',
+    on_schema_change='fail'
+  )
+}}
+```
+
+### materialized = incremental
+
+This tells DBT:
+
+> Do not recreate the table.
+> Only insert new rows when the model runs again.
+
+---
+
+### on_schema_change = 'fail'
+
+If the **source table structure changes**, DBT will stop.
+
+Example schema change:
+
+Before
+
+```
+user_id
+movie_id
+rating
+timestamp
+```
+
+After
+
+```
+user_id
+movie_id
+rating
+timestamp
+device_type
+```
+
+Incremental logic might break because structure changed.
+
+So DBT **fails instead of corrupting data**.
+
+---
+
+# 3. Source data
+
+```sql
+WITH src_ratings AS (
+  SELECT * FROM {{ ref('src_ratings') }}
+)
+```
+
+This just reads the staging model:
+
+```
+src_ratings
+```
+
+Example data:
+
+| user_id | movie_id | rating | timestamp |
+| ------- | -------- | ------ | --------- |
+| 10      | 500      | 4      | 5 PM      |
+| 20      | 600      | 3      | 5:30 PM   |
+
+---
+
+# 4. Main Query
+
+```sql
+SELECT
+  user_id,
+  movie_id,
+  rating,
+  rating_timestamp
+FROM src_ratings
+WHERE rating IS NOT NULL
+```
+
+This simply cleans data:
+
+* selects required columns
+* removes rows where rating is NULL
+
+---
+
+# 5. The confusing part – Incremental Logic
+
+```sql
+{% if is_incremental() %}
+  AND rating_timestamp > (SELECT MAX(rating_timestamp) FROM {{ this }})
+{% endif %}
+```
+
+This is a **conditional block**.
+
+Think of it like a **programming IF statement**.
+
+Meaning:
+
+```
+IF the table already exists
+AND we are doing an incremental run
+THEN apply this filter
+```
+
+---
+
+# 6. What `{{ this }}` means
+
+```
+{{ this }}
+```
+
+Means **the current DBT model table**.
+
+In this case:
+
+```
+movielens.dev.fct_ratings
+```
+
+So this part becomes:
+
+```
+SELECT MAX(rating_timestamp)
+FROM movielens.dev.fct_ratings
+```
+
+---
+
+# 7. How the logic works (step-by-step)
+
+### First Run
+
+Source table (`src_ratings`)
+
+| user | movie | rating | time |
+| ---- | ----- | ------ | ---- |
+| 1    | 100   | 4      | 5 PM |
+| 2    | 200   | 3      | 6 PM |
+
+DBT creates:
+
+```
+fct_ratings
+```
+
+Same data gets inserted.
+
+Max timestamp inside fact table:
+
+```
+6 PM
+```
+
+---
+
+### New data arrives
+
+Source table now:
+
+| user | movie | rating | time |
+| ---- | ----- | ------ | ---- |
+| 1    | 100   | 4      | 5 PM |
+| 2    | 200   | 3      | 6 PM |
+| 3    | 300   | 5      | 7 PM |
+
+---
+
+### Incremental Run
+
+DBT checks condition:
+
+```
+rating_timestamp > MAX(timestamp in fct_ratings)
+```
+
+Which becomes:
+
+```
+rating_timestamp > 6 PM
+```
+
+So only this row qualifies:
+
+| user | movie | rating | time |
+| ---- | ----- | ------ | ---- |
+| 3    | 300   | 5      | 7 PM |
+
+DBT inserts **only this row**.
+
+Final table:
+
+| user | movie | rating | time |
+| ---- | ----- | ------ | ---- |
+| 1    | 100   | 4      | 5 PM |
+| 2    | 200   | 3      | 6 PM |
+| 3    | 300   | 5      | 7 PM |
+
+---
+
+# 8. Why this is powerful
+
+Without incremental:
+
+```
+Every run → rebuild entire table
+```
+
+With incremental:
+
+```
+Check last timestamp
+Insert only new rows
+```
+
+So even if the table has **100 million rows**, DBT processes only new records.
+
+---
+
+# 9. Important thing the instructor mentioned
+
+When you have **thousands of tables**, manually writing logic like:
+
+```
+check latest timestamp
+compare source vs target
+insert new rows
+update data
+```
+
+becomes messy.
+
+Incremental models **automate this pattern**.
+
+You only define the rule once.
+
+---
+
+# 10. Quick meaning of the loop you found confusing
+
+This block is not a loop — it is a **conditional execution block**.
+
+```
+IF incremental run
+    filter only new records
+ELSE
+    load full table
+```
+
+So:
+
+First run → full load
+Next runs → only new rows
+
+

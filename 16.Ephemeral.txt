@@ -1,0 +1,288 @@
+16.Ephemeral
+
+### 1. What is Ephemeral
+
+`materialized = 'ephemeral'` means:
+
+> **Do NOT create any table or view in the database**
+
+Instead:
+
+> DBT uses this query **inside another query (as a CTE)**
+
+---
+
+## 2. What we did here
+
+You wrote this model:
+
+```sql
+dim_movies_with_tags (ephemeral)
+```
+
+It:
+
+* takes data from:
+
+  * dim_movies
+  * dim_genome_tags
+  * fct_genome_scores
+* joins them
+
+So logically it creates:
+
+```text
+movie + tag + relevance_score
+```
+
+BUT…
+
+👉 It does **NOT create a table in Snowflake**
+
+---
+
+## 3. Then what actually happens?
+
+When you run:
+
+```bash
+dbt run
+```
+
+You saw:
+
+```text
+nothing created
+```
+
+Correct.
+
+Because ephemeral = **temporary logic only**
+
+---
+
+## 4. Where is it used then?
+
+When another model uses it:
+
+```sql
+SELECT * FROM {{ ref('dim_movies_with_tags') }}
+```
+
+DBT does something like this behind the scenes:
+
+```sql
+WITH dim_movies_with_tags AS (
+   -- your full join query here
+)
+
+SELECT * FROM dim_movies_with_tags
+```
+
+So your ephemeral model becomes a **CTE (WITH block)** inside another query.
+
+---
+
+## 5. This is the confusing part (important)
+
+Think like this:
+
+### Normal model (table/view)
+
+```text
+DBT → creates table in DB
+```
+
+### Ephemeral model
+
+```text
+DBT → does NOT create table  
+DBT → injects SQL into another model
+```
+
+---
+
+## 6. Why use ephemeral?
+
+Used when:
+
+* you want **helper logic**
+* you don’t want extra tables in DB
+* you want **cleaner code**
+
+---
+
+### Example (your case)
+
+You created:
+
+```text
+dim_movies_with_tags
+```
+
+This is just a **helper join logic**:
+
+```text
+movies + tags + scores
+```
+
+Instead of repeating this join everywhere, you:
+
+* write it once
+* reuse it
+
+---
+
+## 7. Final working flow
+
+You created:
+
+```text
+ephemeral model → dim_movies_with_tags
+```
+
+Then used it in:
+
+```text
+ep_movie_with_tags (normal model)
+```
+
+So DBT did:
+
+```sql
+WITH dim_movies_with_tags AS (
+   -- your join logic
+)
+
+SELECT * FROM dim_movies_with_tags
+```
+
+AND created:
+
+```text
+ep_movie_with_tags (table/view)
+```
+
+---
+
+## 8. Key difference (very important)
+
+| Type        | Creates in DB? | Use                  |
+| ----------- | -------------- | -------------------- |
+| table       | Yes            | final data           |
+| view        | Yes            | light transformation |
+| incremental | Yes            | only new data        |
+| ephemeral   | ❌ No           | helper logic         |
+
+---
+
+## 9. One-line understanding
+
+Ephemeral =
+
+> “Temporary SQL block reused inside other models, not stored in database”
+
+---
+
+## 10. When NOT to use
+
+Don’t use ephemeral if:
+
+* data is large (joins become heavy)
+* you need to query it directly
+* debugging is needed
+
+---
+
+## 11. Why instructor showed this
+
+To teach:
+
+> Not everything needs to be a table
+> Some logic can stay **in memory only**
+
+----------------------------
+
+If a model is `materialized = 'ephemeral'` in dbt:
+
+### 👉 If you run it directly
+
+```bash
+dbt run --select clean_ratings
+```
+
+**You will NOT see:**
+
+* ❌ no table
+* ❌ no view
+* ❌ nothing created in Snowflake
+
+---
+
+### 👉 What actually happens
+
+DBT will:
+
+* **skip creating anything**
+* just keep it as a **temporary SQL block**
+
+---
+
+### 👉 When does it run then?
+
+It only runs **when another model uses it**.
+
+Example:
+
+```sql
+SELECT *
+FROM {{ ref('clean_ratings') }}
+```
+
+Then DBT:
+
+* **injects its SQL**
+* runs it as part of the parent query
+
+---
+
+### 👉 Simple way to understand
+
+| Case                      | Output            |
+| ------------------------- | ----------------- |
+| Run ephemeral alone       | ❌ nothing visible |
+| Used inside another model | ✅ runs internally |
+
+---
+
+### 👉 Real-life analogy
+
+Think of it like a **function in Python**:
+
+```python
+def clean_data():
+    return filtered_data
+```
+
+If you don’t call it → nothing happens
+
+Same with ephemeral.
+
+
+Companies use materialized = 'ephemeral' in dbt mainly for efficiency and cleaner design.
+
+In short:
+
+1. Avoid unnecessary tables
+No extra tables/views created in Snowflake → keeps warehouse clean.
+
+2. Reuse small logic
+Write once, reuse in multiple models (like a helper function).
+
+3. Better performance (for small logic)
+No need to store intermediate data → runs inside main query.
+
+4. Cleaner pipelines
+Break big queries into small readable pieces.
+
+

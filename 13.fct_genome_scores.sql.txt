@@ -1,0 +1,286 @@
+13.fct_genome_scores.sql
+
+---
+
+# The Query
+
+```sql
+WITH src_scores AS (
+    SELECT * FROM {{ ref('src_genome_score') }}
+)
+
+SELECT
+    movie_id,
+    tag_id,
+    ROUND(relevance, 4) AS relevance_score
+FROM src_scores
+WHERE relevance > 0
+```
+
+---
+
+# 1. First part: WITH (creating a temporary table)
+
+```sql
+WITH src_scores AS (
+    SELECT * FROM {{ ref('src_genome_score') }}
+)
+```
+
+This means:
+
+**Create a temporary dataset called `src_scores`.**
+
+Data comes from:
+
+```sql
+{{ ref('src_genome_score') }}
+```
+
+In DBT, `ref()` means:
+
+> “Use the output of another model.”
+
+So this is basically doing:
+
+```sql
+SELECT * FROM src_genome_score
+```
+
+But DBT manages dependencies automatically.
+
+So conceptually:
+
+```
+src_genome_score (staging view)
+            ↓
+      src_scores (temporary name)
+```
+
+Nothing new is created yet.
+
+---
+
+# 2. What src_genome_score contains
+
+This table already has data like:
+
+| movie_id | tag_id | relevance |
+| -------- | ------ | --------- |
+| 1        | 10     | 0.75      |
+| 1        | 20     | 0.12      |
+| 2        | 15     | 0.00      |
+| 2        | 18     | 0.90      |
+
+Relevance means:
+
+**How strongly a tag applies to a movie.**
+
+Example:
+
+```
+Movie: Toy Story
+Tag: Animation
+Relevance: 0.95
+```
+
+---
+
+# 3. Main SELECT
+
+```sql
+SELECT
+    movie_id,
+    tag_id,
+    ROUND(relevance, 4) AS relevance_score
+```
+
+This selects three columns.
+
+| Column          | Meaning                 |
+| --------------- | ----------------------- |
+| movie_id        | movie identifier        |
+| tag_id          | tag identifier          |
+| relevance_score | cleaned relevance value |
+
+---
+
+# 4. ROUND(relevance,4)
+
+```sql
+ROUND(relevance, 4)
+```
+
+This rounds the number to **4 decimal places**.
+
+Example:
+
+```
+0.75634892
+```
+
+becomes
+
+```
+0.7563
+```
+
+So the output column becomes:
+
+```
+relevance_score
+```
+
+---
+
+# 5. Filtering condition
+
+```sql
+WHERE relevance > 0
+```
+
+This removes useless rows.
+
+Example input:
+
+| movie_id | tag_id | relevance |
+| -------- | ------ | --------- |
+| 1        | 10     | 0.75      |
+| 1        | 20     | 0.00      |
+| 2        | 15     | 0.50      |
+
+After filter:
+
+| movie_id | tag_id | relevance_score |
+| -------- | ------ | --------------- |
+| 1        | 10     | 0.7500          |
+| 2        | 15     | 0.5000          |
+
+The row with **0 relevance is removed**.
+
+Why?
+
+Because **relevance 0 means the tag does not apply to that movie**.
+
+---
+
+# 6. Final output table
+
+The fact table becomes:
+
+| movie_id | tag_id | relevance_score |
+| -------- | ------ | --------------- |
+| 1        | 10     | 0.7500          |
+| 1        | 25     | 0.5400          |
+| 2        | 18     | 0.9123          |
+
+This table basically answers:
+
+> **Which tag applies to which movie and how strongly?**
+
+---
+
+# 7. Why this is a FACT table
+
+Fact tables store **relationships + metrics**.
+
+Here we have:
+
+```
+movie_id
+tag_id
+relevance_score (metric)
+```
+
+So it connects:
+
+```
+dim_movies
+dim_genome_tags
+```
+
+Structure becomes:
+
+```
+dim_movies
+     |
+     | movie_id
+     |
+fact_genome_scores
+     |
+     | tag_id
+     |
+dim_genome_tags
+```
+
+This is a classic **star schema**.
+
+---
+
+# 8. Why DBT used WITH here
+
+The `WITH` block is just to make the query **cleaner and readable**.
+
+Instead of writing:
+
+```sql
+SELECT movie_id, tag_id
+FROM src_genome_score
+```
+
+he first assigns it a name:
+
+```
+src_scores
+```
+
+Then uses it.
+
+This is called a **CTE (Common Table Expression)**.
+
+---
+
+# 9. What DBT finally creates
+
+DBT converts this model into something like:
+
+```sql
+CREATE TABLE fct_genome_scores AS
+SELECT ...
+```
+
+So Snowflake gets a real table:
+
+```
+fct_genome_scores
+```
+
+---
+
+# 10. Entire pipeline now
+
+Your pipeline finally looks like this:
+
+```
+RAW DATA (S3)
+     ↓
+raw tables
+     ↓
+staging views (src_*)
+     ↓
+dimension tables (dim_*)
+     ↓
+fact table (fct_genome_scores)
+```
+
+---
+
+# The one concept you should remember
+
+This model is doing **three simple things only**:
+
+1. Read staging data (`src_genome_score`)
+2. Clean the metric (`ROUND`)
+3. Remove useless rows (`relevance > 0`)
+
+That's it.

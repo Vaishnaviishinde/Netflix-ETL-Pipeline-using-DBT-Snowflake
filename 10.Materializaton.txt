@@ -1,0 +1,431 @@
+10.Materializaton
+---
+
+# 1. First understand the core idea
+
+In DBT you write a **SQL model** like this:
+
+```sql
+SELECT movieId, title
+FROM movielens.raw.raw_movies
+```
+
+Now the question is:
+
+**Where should the result of this query be stored in the warehouse?**
+
+DBT needs to decide whether to create:
+
+* a **View**
+* a **Table**
+* an **Incremental table**
+* something temporary
+* a **Materialized View**
+
+The **method DBT uses to store the result is called → Materialization**.
+
+So:
+
+**Materialization = how DBT stores the result of your model in the warehouse.**
+
+---
+
+# 2. Simple real-life analogy
+
+Imagine you cook food.
+
+You cook a dish and then you can:
+
+1. **Write the recipe only** → View
+2. **Cook and store the food** → Table
+3. **Add only new ingredients next time** → Incremental
+4. **Temporary bowl while cooking** → Ephemeral
+5. **Smart fridge that refreshes automatically** → Materialized View
+
+These are the **5 DBT materializations**.
+
+---
+
+# 3. Materialization Type 1 — View
+
+Most common for staging models.
+
+A **view does NOT store data**.
+
+It only stores the **query**.
+
+Example DBT model:
+
+```sql
+SELECT movieId, title
+FROM movielens.raw.raw_movies
+```
+
+DBT converts it internally to:
+
+```sql
+CREATE VIEW stg_movies AS
+SELECT movieId, title
+FROM movielens.raw.raw_movies
+```
+
+Important thing:
+
+The **view only stores the query**, not the data.
+
+So every time you run:
+
+```sql
+SELECT * FROM stg_movies
+```
+
+the database actually runs the original query again.
+
+---
+
+### Example
+
+Raw table:
+
+```
+raw_movies
+----------------
+movieId title
+1       Avatar
+2       Titanic
+```
+
+View:
+
+```
+stg_movies
+```
+
+When you query the view, it fetches data from raw table again.
+
+---
+
+### Advantages
+
+* Always shows **latest data**
+* Very little storage
+* Fast to create
+
+---
+
+### Disadvantages
+
+* Query may be slower if raw table is huge
+* Because query runs every time
+
+---
+
+# 4. Materialization Type 2 — Table
+
+A **table stores actual data physically**.
+
+Example DBT model:
+
+```sql
+SELECT movieId, title
+FROM movielens.raw.raw_movies
+```
+
+DBT converts it to:
+
+```sql
+CREATE TABLE stg_movies AS
+SELECT movieId, title
+FROM movielens.raw.raw_movies
+```
+
+Now the **data is copied into the table**.
+
+---
+
+### Example
+
+Raw table:
+
+```
+raw_movies
+movieId title
+1 Avatar
+2 Titanic
+```
+
+DBT table:
+
+```
+stg_movies
+movieId title
+1 Avatar
+2 Titanic
+```
+
+This is a **physical copy of data**.
+
+---
+
+### Advantages
+
+* Faster queries
+* Data stored physically
+* Good for dashboards
+
+---
+
+### Disadvantages
+
+* Takes storage
+* Must rebuild when data changes
+
+---
+
+### Important difference
+
+View
+
+```
+stores query
+```
+
+Table
+
+```
+stores data
+```
+
+---
+
+# 5. Materialization Type 3 — Incremental
+
+This is used when **data is huge**.
+
+Imagine a table with **1 billion rows**.
+
+If DBT rebuilds it every run, it will take hours.
+
+Instead DBT only loads **new rows**.
+
+---
+
+### Example
+
+Day 1
+
+```
+Orders table
+1
+2
+3
+```
+
+Day 2 new orders arrive
+
+```
+4
+5
+```
+
+Incremental model only inserts:
+
+```
+4
+5
+```
+
+instead of rebuilding the whole table.
+
+---
+
+### Real company use
+
+Common for:
+
+* event logs
+* transactions
+* streaming data
+* clickstream data
+
+---
+
+# 6. Materialization Type 4 — Ephemeral
+
+This one confuses many people.
+
+Ephemeral models **do NOT create any table or view**.
+
+They exist **only inside another query**.
+
+Example model:
+
+```
+ephemeral_model.sql
+```
+
+```sql
+SELECT movieId, title
+FROM raw_movies
+```
+
+When another model uses it, DBT **injects it as a CTE**.
+
+Example final SQL becomes:
+
+```sql
+WITH ephemeral_model AS (
+SELECT movieId, title
+FROM raw_movies
+)
+
+SELECT *
+FROM ephemeral_model
+```
+
+So ephemeral models are **temporary logic blocks**.
+
+---
+
+### Why use it?
+
+To avoid repeating logic.
+
+Example
+
+Cleaning logic reused in many queries.
+
+---
+
+# 7. Materialization Type 5 — Materialized View
+
+This is like **hybrid of table and view**.
+
+It:
+
+* stores data like a table
+* automatically refreshes like a view
+
+---
+
+### Example
+
+Table
+
+```
+stores data but does not auto refresh
+```
+
+View
+
+```
+auto refresh but no stored data
+```
+
+Materialized View
+
+```
+stores data AND refreshes automatically
+```
+
+---
+
+### Why companies use it
+
+Fast queries + fresh data.
+
+But:
+
+* not supported everywhere
+* needs configuration
+
+---
+
+# 8. Visual summary
+
+```
+DBT Model (SQL)
+       |
+       v
+Materialization decides how it is stored
+```
+
+| Type              | Stores Data?      | Refresh           |
+| ----------------- | ----------------- | ----------------- |
+| View              | No                | Always latest     |
+| Table             | Yes               | Only when rebuilt |
+| Incremental       | Yes               | Only new rows     |
+| Ephemeral         | No object created | Temporary         |
+| Materialized View | Yes               | Auto refresh      |
+
+---
+
+# 9. Where this is defined in DBT
+
+Inside **dbt_project.yml**
+
+Example:
+
+```
+models:
+  netflix:
+    staging:
+      materialized: view
+```
+
+Meaning:
+
+All staging models become **views**.
+
+---
+
+Or inside model file:
+
+```sql
+{{ config(materialized='table') }}
+```
+
+---
+
+# 10. Real DBT architecture in companies
+
+Typical pipeline:
+
+```
+Raw data (S3 / ingestion)
+        |
+        v
+Snowflake raw tables
+        |
+        v
+DBT staging models (views)
+        |
+        v
+DBT transformations (tables)
+        |
+        v
+Analytics marts (incremental tables)
+        |
+        v
+Power BI / Tableau dashboards
+```
+
+---
+
+# 11. The most important takeaway
+
+**DBT models are just SQL SELECT queries.**
+
+Materialization decides:
+
+```
+How DBT stores the result of that query.
+```
+
+This is why the instructor said:
+
+> "This is the core of DBT"
+
+Because almost every DBT pipeline revolves around **choosing the correct materialization**.
+
+

@@ -1,0 +1,302 @@
+23.Macros 
+
+## DBT Macros — Simple, Clear Notes (no confusion)
+
+---
+
+## 1. What is a Macro in DBT?
+
+A macro in DBT = **reusable SQL logic (like a function)**
+
+* Written using **Jinja (templating language)**
+* Helps avoid repeating same SQL again & again
+
+👉 Think:
+Instead of writing same SQL 10 times → write once, reuse everywhere
+
+---
+
+## 2. Important: Is Macro a Test?
+
+❌ NO
+
+* Macro ≠ Test
+* Macro = reusable logic
+* Test = validation check
+
+✔ BUT → macros are **used inside tests also**
+
+---
+
+## 3. Where do we write Macros?
+
+Inside:
+
+```
+macros/
+```
+
+Example file:
+
+```
+macros/my_macro.sql
+```
+
+---
+
+## 4. Basic Syntax (VERY IMPORTANT)
+
+### Define Macro
+
+```sql id="x1a2b3"
+{% macro macro_name(arg1, arg2) %}
+
+-- SQL logic here
+
+{% endmacro %}
+```
+
+---
+
+### Call Macro
+
+```sql id="y4c5d6"
+{{ macro_name(value1, value2) }}
+```
+
+---
+
+## 5. Simple Example (Understand Easily)
+
+### Problem:
+
+You always filter only valid ratings
+
+Instead of writing:
+
+```sql id="ex1"
+WHERE rating IS NOT NULL AND rating > 0
+```
+
+---
+
+### Create Macro:
+
+```sql id="ex2"
+{% macro valid_rating(column_name) %}
+
+{{ column_name }} IS NOT NULL AND {{ column_name }} > 0
+
+{% endmacro %}
+```
+
+---
+
+### Use Macro:
+
+```sql id="ex3"
+SELECT *
+FROM fct_ratings
+WHERE {{ valid_rating('rating') }}
+```
+
+👉 Clean + reusable
+
+---
+
+## 6. Example 2 — Dynamic Column Selection
+
+```sql id="ex4"
+{% macro select_columns(cols) %}
+
+{% for col in cols %}
+    {{ col }}{% if not loop.last %}, {% endif %}
+{% endfor %}
+
+{% endmacro %}
+```
+
+Use:
+
+```sql id="ex5"
+SELECT {{ select_columns(['user_id','movie_id','rating']) }}
+FROM fct_ratings
+```
+
+---
+
+## 7. Example 3 — Surrogate Key (VERY IMPORTANT in companies)
+
+Instead of writing complex hash logic:
+
+```sql id="ex6"
+{{ dbt_utils.generate_surrogate_key(['user_id','movie_id']) }}
+```
+
+👉 This itself is a macro from package
+
+---
+
+## 8. Example 4 — Conditional Logic (Advanced)
+
+```sql id="ex7"
+{% macro filter_recent_data(column) %}
+
+{% if is_incremental() %}
+    WHERE {{ column }} > (SELECT MAX({{ column }}) FROM {{ this }})
+{% endif %}
+
+{% endmacro %}
+```
+
+👉 Used in incremental models
+
+---
+
+## 9. Real Company Use Cases (VERY IMPORTANT)
+
+### 1. Standard Filters
+
+* remove nulls
+* clean bad data
+
+---
+
+### 2. Reusable Joins
+
+```sql id="ex8"
+{% macro join_movies() %}
+LEFT JOIN dim_movies USING (movie_id)
+{% endmacro %}
+```
+
+---
+
+### 3. Dynamic SQL generation
+
+* selecting columns dynamically
+* building pivot queries
+
+---
+
+### 4. Surrogate Key generation
+
+* widely used in warehouses
+
+---
+
+### 5. Audit Columns
+
+```sql id="ex9"
+{% macro audit_columns() %}
+    CURRENT_TIMESTAMP AS created_at,
+    CURRENT_USER AS created_by
+{% endmacro %}
+```
+
+---
+
+### 6. Custom Tests (IMPORTANT)
+
+Macros are used to **build reusable tests**
+
+---
+
+## 10. Key Jinja Concepts (Used in Macros)
+
+### Variables
+
+```sql id="ex10"
+{{ column_name }}
+```
+
+---
+
+### If Condition
+
+```sql id="ex11"
+{% if condition %}
+   SQL
+{% endif %}
+```
+
+---
+
+### Loop
+
+```sql id="ex12"
+{% for col in columns %}
+   {{ col }}
+{% endfor %}
+```
+
+---
+
+## 11. Why Macros are Powerful
+
+### Without Macros:
+
+* repetitive SQL
+* messy code
+* hard to maintain
+
+---
+
+### With Macros:
+
+* reusable
+* clean
+* dynamic
+* scalable
+
+---
+
+## 12. Important DBT-specific Macros (built-in)
+
+| Macro              | Use                   |
+| ------------------ | --------------------- |
+| `ref()`            | reference model       |
+| `source()`         | reference raw table   |
+| `this`             | current model         |
+| `is_incremental()` | check incremental run |
+
+---
+
+## 13. Common Mistakes
+
+### ❌ Forgetting `{{ }}`
+
+```sql id="bad1"
+valid_rating('rating')
+```
+
+### ✅ Correct
+
+```sql id="good1"
+{{ valid_rating('rating') }}
+```
+
+---
+
+### ❌ Mixing SQL + Jinja wrong
+
+### ❌ Wrong indentation in loops
+
+---
+
+## 14. Easy Way to Remember
+
+| Concept | Meaning         |
+| ------- | --------------- |
+| Macro   | function        |
+| {{ }}   | execute & print |
+| {% %}   | logic (if/loop) |
+
+---
+
+## 15. One-Line Summary
+
+DBT Macros =
+**Reusable + dynamic SQL functions using Jinja**
+
+---

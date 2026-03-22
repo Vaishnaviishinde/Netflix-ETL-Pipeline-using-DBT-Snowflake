@@ -1,0 +1,568 @@
+9.DBT Models 
+
+DBT Models
+
+What is a DBT model
+
+A DBT model is simply a SQL file that transforms data.
+
+In DBT, every model is a `.sql` file that usually contains **one SELECT statement**.
+
+DBT runs that SQL and creates a **table or view in the data warehouse**.
+
+So model = SQL transformation.
+
+Example
+
+```
+models/staging/src_movies.sql
+```
+
+Inside it:
+
+```
+SELECT *
+FROM movielens.raw.raw_movies
+```
+
+When you run
+
+```
+dbt run
+```
+
+DBT executes this SQL in Snowflake and creates a table/view.
+
+So the flow becomes
+
+Raw data → DBT SQL model → Table/View in warehouse
+
+---
+
+Why DBT calls it "Model"
+
+Honestly it is just a naming convention.
+
+Model = SQL transformation file.
+
+But the important part is models can **reference other models**, which allows DBT to build a **dependency graph (DAG)**.
+
+Example
+
+```
+raw_movies table
+      ↓
+stg_movies model
+      ↓
+top_movies model
+```
+
+DBT automatically understands the order and runs them correctly.
+
+This is the biggest power of DBT.
+
+---
+
+Real problem DBT solves
+
+Normally SQL pipelines look like this:
+
+One huge SQL script.
+
+Example
+
+```
+2000 line SQL script
+```
+
+Inside it you create
+
+temporary tables
+CTEs
+joins
+calculations
+filters
+
+Everything in one file.
+
+Problems
+
+Hard to maintain
+Hard to debug
+Hard to reuse logic
+
+---
+
+DBT solution
+
+Break one big SQL script into **small modular models**.
+
+Example
+
+Instead of one huge script:
+
+```
+2000 line SQL
+```
+
+You create multiple models
+
+```
+models
+ ├ staging
+ │   └ stg_movies.sql
+ ├ intermediate
+ │   └ movie_ratings_join.sql
+ └ marts
+     └ top_movies.sql
+```
+
+Each model does **one step of transformation**.
+
+DBT connects them automatically.
+
+---
+
+Creating staging models
+
+Inside models folder you can create any folders you want.
+
+Example
+
+```
+models
+ └ staging
+```
+
+Why staging?
+
+In data pipelines we normally follow layers.
+
+```
+Raw layer
+Staging layer
+Transformation layer
+Analytics layer
+```
+
+So staging is the **first clean version of raw data**.
+
+---
+
+Important concept: Raw vs Staging
+
+In Snowflake we have raw data loaded from sources.
+
+Example
+
+```
+movielens.raw.raw_movies
+```
+
+We **never modify raw tables**.
+
+Reason
+
+Raw is the original source data.
+If something breaks we can always reload or reprocess.
+
+So we copy raw data into staging.
+
+Architecture
+
+```
+Source Systems
+      ↓
+Raw tables
+      ↓
+Staging models
+      ↓
+Transformations
+      ↓
+Analytics tables
+```
+
+Raw stays untouched.
+
+All transformations happen after staging.
+
+---
+
+Creating a staging model
+
+Step 1
+
+Create folder
+
+```
+models/staging
+```
+
+Step 2
+
+Create SQL file
+
+```
+src_movies.sql
+```
+
+---
+
+Example staging model
+
+```
+WITH raw_movies AS (
+    SELECT *
+    FROM movielens.raw.raw_movies
+)
+
+SELECT
+    movieId AS movie_id,
+    title,
+    genres
+FROM raw_movies
+```
+
+Explanation step by step
+
+---
+
+Step 1: CTE (WITH statement)
+
+```
+WITH raw_movies AS (
+    SELECT *
+    FROM movielens.raw.raw_movies
+)
+```
+
+This creates a temporary dataset called `raw_movies`.
+
+It simply loads raw table from Snowflake.
+
+Example
+
+```
+movielens.raw.raw_movies
+```
+
+means
+
+```
+database.schema.table
+```
+
+So
+
+```
+movielens = database
+raw = schema
+raw_movies = table
+```
+
+---
+
+Step 2: Final SELECT
+
+```
+SELECT
+    movieId AS movie_id,
+    title,
+    genres
+FROM raw_movies
+```
+
+Here we are doing small cleaning.
+
+Example change
+
+```
+movieId → movie_id
+```
+
+This is common in staging.
+
+Typical staging tasks
+
+Rename columns
+Standardize formats
+Remove bad rows
+Fix data types
+
+---
+
+Running the model
+
+Command
+
+```
+dbt run
+
+
+What happens internally
+
+When you run
+
+```
+dbt run
+```
+
+DBT does this
+
+1. Reads all models
+2. Builds dependency graph
+3. Connects to Snowflake
+4. Executes SQL
+5. Creates tables/views
+
+Flow
+
+```
+DBT
+ ↓
+SQL model
+ ↓
+Snowflake warehouse
+ ↓
+Table/View created
+```
+
+---
+
+Example DBT output
+
+You may see logs like
+
+```
+Running with dbt=1.x
+Found 1 model
+Starting model src_movies
+Completed successfully
+```
+
+Meaning
+
+DBT successfully executed the SQL.
+
+---
+
+Where the result appears
+
+DBT creates the object in Snowflake.
+
+Example
+
+```
+Database
+ └ Schema
+     └ SRC_MOVIES (view)
+```
+
+When you open it you will see
+
+```
+movie_id
+title
+genres
+```
+
+Which is exactly what the model selected.
+
+---
+
+Important question
+
+Why did DBT create a VIEW instead of a TABLE?
+
+Answer: Default materialization.
+
+In DBT every model has a **materialization type**.
+
+Materialization decides **what object DBT creates in warehouse**.
+
+Options
+
+view
+table
+incremental
+
+---
+
+Default behavior
+
+If you do not specify anything, DBT creates **views**.
+
+This configuration comes from `dbt_project.yml`.
+
+Example
+
+```
+models:
+  netflix:
+    staging:
+      materialized: view
+```
+
+Meaning
+
+All models in staging folder will become **views**.
+
+---
+
+Difference: View vs Table
+
+View
+
+Does not store data.
+Runs query every time.
+
+Example
+
+```
+CREATE VIEW stg_movies AS
+SELECT ...
+```
+
+Table
+
+Stores physical data.
+
+Example
+
+```
+CREATE TABLE stg_movies AS
+SELECT ...
+```
+
+---
+
+Final architecture of this step
+
+```
+Snowflake
+   ↓
+Raw Table
+movielens.raw.raw_movies
+   ↓
+DBT Model
+src_movies.sql
+   ↓
+View created
+src_movies
+```
+
+DBT models use only one SELECT statement because DBT itself handles the CREATE TABLE or CREATE VIEW part automatically.
+
+So instead of writing:
+
+CREATE TABLE stg_movies AS
+SELECT ...
+
+you only write:
+
+SELECT ...
+
+DBT will automatically convert it internally to something like:
+
+If materialization = view
+
+CREATE VIEW stg_movies AS
+SELECT ...
+
+If materialization = table
+
+CREATE TABLE stg_movies AS
+SELECT ...
+
+So the reason is:
+
+DBT manages table/view creation automatically
+
+Keeps models simple (only transformation logic)
+
+Easier to change later (you can switch view → table from config without rewriting SQL)
+
+
+
+------------------------------
+
+ERRORS 
+
+dbt Model Errors – 
+
+1️⃣ File not saved in VS Code
+
+Problem
+
+The SQL tab had a white dot, meaning the file was not saved.
+
+dbt run executed the old version, so dbt showed “Nothing to do.”
+
+Fix
+
+Save file before running.
+
+Ctrl + S
+dbt run
+2️⃣ Wrong database name in Snowflake
+
+Problem
+
+Database 'MOVIELENSE' does not exist
+
+Cause: Typo in database name.
+
+movielense ❌
+movielens  ✅
+
+Fix
+
+SELECT * 
+FROM movielens.raw.raw_movies
+3️⃣ Using source() without defining it
+
+Problem
+
+source named 'netflix.r_movies' not found
+
+Cause: dbt source() was used but no source was defined in YAML.
+
+Example of wrong usage:
+
+{{ source('netflix','r_movies') }}
+
+Fix (temporary)
+Use direct Snowflake table reference:
+
+FROM movielens.raw.raw_movies
+
+Later you can define sources in sources.yml.
+
+4️⃣ Folder name typo
+
+Problem
+
+models/stagging
+
+dbt convention expects:
+
+models/staging
+
+Typos can cause models not being detected correctly.
+
+Fix
+
+Rename folder:
+
+stagging → staging
+5️⃣ dbt warning about unused configuration
+models.netflix.example
+
+Cause: dbt created a default example folder that was not used.
+
+Fix
+
+Delete:
+
+models/example
+

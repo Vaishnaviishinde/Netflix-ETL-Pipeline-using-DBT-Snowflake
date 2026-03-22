@@ -1,0 +1,1006 @@
+3.Why DBT,ETL vs ELT
+---
+
+# 1. Why DBT Was Needed (Problem Before DBT)
+
+Before tools like dbt (Data Build Tool), data transformation was done in messy ways.
+
+### Method 1 — Manual SQL Scripts
+
+Engineers wrote SQL files manually.
+
+Example:
+
+```
+script1.sql
+script2.sql
+script3.sql
+```
+
+Example SQL:
+
+```sql
+SELECT user_id,
+       SUM(price) AS total_revenue
+FROM sales
+GROUP BY user_id;
+```
+
+Problems:
+
+1. Hard to maintain
+2. Hard to track changes
+3. No automatic testing
+4. Difficult collaboration
+5. Difficult to manage dependencies
+
+Example problem:
+
+Engineer A writes:
+
+```
+revenue.sql
+```
+
+Engineer B modifies:
+
+```
+revenue.sql
+```
+
+Now:
+
+* old logic lost
+* no version history
+* pipeline may break
+
+---
+
+### Method 2 — ETL Tools
+
+Companies used heavy ETL tools like:
+
+• Apache Spark
+• Apache Airflow
+• Informatica
+
+Example pipeline:
+
+```
+Source DB
+   ↓
+Spark transformation
+   ↓
+Load to warehouse
+```
+
+Problems:
+
+1. Complex infrastructure
+2. Expensive clusters
+3. Requires expertise
+4. Multiple languages used
+
+Example:
+
+```
+SQL
+Python
+PySpark
+Scala
+Java
+```
+
+Hard to maintain large pipelines.
+
+---
+
+### Method 3 — Custom Code Pipelines
+
+Some teams wrote custom code.
+
+Example:
+
+Python ETL script:
+
+```python
+df = read_csv("sales.csv")
+df["revenue"] = df["price"] * df["quantity"]
+df.to_sql("sales_clean")
+```
+
+Problems:
+
+• debugging difficult
+• code scattered
+• poor documentation
+• difficult testing
+
+---
+
+# 2. Major Problems in Old Data Pipelines
+
+### 1. Poor Dependency Management
+
+Example:
+
+```
+model_a → model_b → model_c
+```
+
+If `model_a` fails, pipeline breaks.
+
+But systems earlier did not track dependencies well.
+
+---
+
+### 2. Collaboration Problems
+
+Example:
+
+5 engineers working on same pipeline.
+
+Without structured tools:
+
+• code conflicts
+• manual coordination
+• pipeline errors
+
+---
+
+### 3. Poor Documentation
+
+Many pipelines had no clear documentation.
+
+Example:
+
+```
+table_sales_final
+```
+
+No one knows:
+
+• how it was created
+• which tables it uses
+• transformation logic
+
+---
+
+### 4. Testing Issues
+
+Example:
+
+Data should not contain nulls.
+
+Old pipelines rarely had automated checks.
+
+---
+
+# 3. How DBT Solves These Problems
+
+DBT introduces structured data transformation.
+
+### 1. Modularity
+
+Instead of writing huge SQL scripts:
+
+Bad approach:
+
+```
+1000 lines SQL
+```
+
+Better approach in DBT:
+
+```
+models/
+   customers.sql
+   orders.sql
+   revenue.sql
+```
+
+Each model performs one task.
+
+Example:
+
+`orders_clean.sql`
+
+```sql
+SELECT *
+FROM raw.orders
+WHERE price > 0
+```
+
+---
+
+### 2. Reusability
+
+Reusable SQL logic.
+
+Example:
+
+A revenue calculation used in many models.
+
+Without DBT:
+
+Repeated SQL everywhere.
+
+With DBT:
+
+Reusable macro.
+
+---
+
+### 3. Built-in Testing
+
+Example rule:
+
+```
+customer_id must not be NULL
+```
+
+DBT test:
+
+```
+not_null
+unique
+```
+
+This ensures data quality.
+
+---
+
+### 4. Documentation Generation
+
+DBT automatically generates documentation.
+
+Command:
+
+```
+dbt docs generate
+```
+
+Result:
+
+Interactive data lineage graph.
+
+Shows:
+
+```
+raw_orders
+   ↓
+orders_clean
+   ↓
+revenue_model
+```
+
+---
+
+### 5. Dependency Management
+
+DBT automatically runs models in correct order.
+
+Example:
+
+```
+orders_clean
+   ↓
+customer_orders
+   ↓
+revenue_model
+```
+
+Using:
+
+```
+ref()
+```
+
+DBT builds dependency graph.
+
+---
+
+### 6. Development Workflow
+
+DBT supports environments.
+
+Example environments:
+
+```
+DEV
+TEST
+PROD
+```
+
+Engineers develop safely before production deployment.
+
+---
+
+# 4. Data Warehouse Concept
+
+A **data warehouse** stores structured data for analytics.
+
+Example warehouse tools:
+
+• Snowflake
+• Google BigQuery
+• Amazon Redshift
+
+Purpose:
+
+Store clean data for reporting and analysis.
+
+Example table:
+
+```
+sales_summary
+```
+
+Used by:
+
+• analysts
+• dashboards
+• ML models
+
+---
+
+# 5. Data Lake Concept
+
+A **data lake stores raw data**.
+
+Example storage:
+
+• Amazon Web Services S3
+
+Example raw files:
+
+```
+sales.csv
+logs.json
+images
+```
+
+Advantages:
+
+• cheap storage
+• flexible format
+• large scale storage
+
+Example query tool:
+
+```
+Amazon Athena
+```
+
+Query data directly from S3.
+
+---
+
+# 6. Data Warehouse vs Data Lake
+
+| Feature     | Data Warehouse           | Data Lake                 |
+| ----------- | ------------------------ | ------------------------- |
+| Data type   | structured               | raw / any type            |
+| Use case    | analytics                | storage                   |
+| processing  | processed before storage | processed during analysis |
+| performance | faster queries           | slower queries            |
+
+Example:
+
+Warehouse:
+
+```
+sales_summary
+```
+
+Lake:
+
+```
+raw_logs.json
+```
+
+---
+
+# 7. Data Lakehouse
+
+Modern architecture combines both.
+
+Concept:
+
+```
+Data Lake + Data Warehouse
+```
+
+Called:
+
+```
+Lakehouse
+```
+
+Purpose:
+
+• raw storage
+• structured analytics
+
+Example tools:
+
+Databricks Lakehouse.
+
+---
+
+# 8. ETL vs ELT (Detailed Explanation)
+
+## ETL
+
+Process:
+
+```
+Extract → Transform → Load
+```
+
+Steps:
+
+1. Extract data from sources
+2. Transform data in processing system
+3. Load cleaned data into warehouse
+
+Example pipeline:
+
+```
+API
+   ↓
+Spark transformation
+   ↓
+Warehouse table
+```
+
+---
+
+### ETL Example
+
+Raw data:
+
+```
+customer_id | price
+1           | 10
+2           | NULL
+```
+
+Transformation:
+
+```
+remove NULL
+rename columns
+join tables
+```
+
+Final warehouse table:
+
+```
+customer_revenue
+```
+
+---
+
+### ETL Advantages
+
+1. Clean data before storage
+2. Strong data governance
+3. Efficient storage
+4. Good for legacy systems
+
+---
+
+### ETL Disadvantages
+
+1. Complex pipelines
+2. expensive infrastructure
+3. slower development
+4. difficult scaling
+
+---
+
+## ELT
+
+Process:
+
+```
+Extract → Load → Transform
+```
+
+Steps:
+
+1. Extract data
+2. Load raw data to warehouse
+3. Transform inside warehouse
+
+Transformation happens using SQL.
+
+---
+
+### ELT Example
+
+Step 1 — Load raw data:
+
+```
+raw_sales
+```
+
+Step 2 — Transform using SQL:
+
+```sql
+SELECT customer_id,
+       SUM(price)
+FROM raw_sales
+GROUP BY customer_id
+```
+
+Creates:
+
+```
+sales_summary
+```
+
+---
+
+### ELT Advantages
+
+1. simpler architecture
+2. faster development
+3. scalable with cloud warehouses
+4. flexible transformations
+
+---
+
+### ELT Disadvantages
+
+1. raw data stored (storage cost)
+2. messy raw datasets
+3. security concerns if sensitive data loaded raw
+
+---
+
+# 9. Which Is Preferred Today?
+
+Modern data engineering prefers **ELT**.
+
+Reasons:
+
+Modern warehouses like:
+
+• Snowflake
+• Google BigQuery
+
+have huge compute power.
+
+So instead of preprocessing data externally:
+
+```
+load everything
+then transform using SQL
+```
+
+DBT works perfectly with ELT architecture.
+
+---
+
+# 10. Modern Data Stack
+
+Modern architecture uses specialized tools.
+
+Example stack:
+
+Sources:
+
+```
+Stripe
+Salesforce
+Applications
+```
+
+Ingestion tools:
+
+```
+Fivetran
+Airbyte
+Stitch
+```
+
+Storage:
+
+```
+Data Warehouse
+```
+
+Transformation:
+
+```
+DBT
+```
+
+Orchestration:
+
+```
+Airflow
+Prefect
+Dagster
+```
+
+Analytics:
+
+```
+Power BI
+Tableau
+Looker
+```
+
+---------------------
+
+1. Sources (Where Data Is Created)
+
+These are the applications or systems where the data originally exists.
+
+Examples:
+
+Stripe
+Payment system.
+Stores data like:
+
+transactions
+
+customer payments
+
+refunds
+
+Example:
+
+customer_id | amount | payment_date
+101         | 500    | 2026-03-10
+
+Salesforce
+CRM system used by sales teams.
+
+Stores data like:
+
+leads
+
+customers
+
+deals
+
+sales pipeline
+
+Example:
+
+lead_id | company | deal_value
+201     | ABC Ltd | 20000
+
+Applications
+These are your company's own apps or websites.
+
+Example:
+
+Netflix app
+
+e-commerce website
+
+mobile app
+
+Data generated:
+
+user_id | movie_watched | watch_time
+
+So sources = where data is generated.
+
+2. Ingestion Tools (Tools That Move Data)
+
+These tools extract data from sources and load it into the data warehouse automatically.
+
+Examples:
+
+Fivetran
+Automatically copies data from apps like Stripe or Salesforce to a warehouse.
+
+Example pipeline:
+
+Stripe → Fivetran → Snowflake
+
+Airbyte
+Open-source tool that moves data from many sources.
+
+Example:
+
+Salesforce → Airbyte → Data Warehouse
+
+Stitch
+Cloud tool that extracts data and loads it into a warehouse.
+
+Example:
+
+MySQL database → Stitch → Snowflake
+Simple Full Flow
+Sources (where data exists)
+      ↓
+Ingestion tools (move data)
+      ↓
+Data Warehouse
+      ↓
+DBT transforms data
+      ↓
+Dashboard / analytics
+
+Example real pipeline:
+
+Stripe payments
+      ↓
+Fivetran
+      ↓
+Snowflake
+      ↓
+DBT transformations
+      ↓
+Power BI dashboard
+One-Line Understanding
+
+Sources = where data is created
+
+Ingestion tools = tools that copy data into the warehouse
+
+----------------
+
+# 11. Modern Data Pipeline Example
+
+Full pipeline:
+
+```
+Application data
+   ↓
+Ingestion tool
+   ↓
+Data warehouse
+   ↓
+DBT transformations
+   ↓
+Analytics tables
+   ↓
+Dashboard
+```
+
+---
+
+# 12. Final Key Idea
+
+DBT exists because:
+
+Old pipelines were:
+
+• complex
+• expensive
+• difficult to maintain
+
+DBT makes transformation:
+
+• modular
+• testable
+• version controlled
+• collaborative
+
+------------------------
+
+Here is the **DBT 4-layer architecture in short with simple examples**.
+
+Tools used in this layer system usually run on a warehouse like Snowflake and transformations are managed by dbt (Data Build Tool).
+
+---
+
+# 1. Landing Layer (Raw Layer)
+
+Purpose:
+Store **raw data exactly as it arrives**.
+
+Rules:
+
+* Do not modify data
+* Keep original structure
+* Used as backup source
+
+Example raw table:
+
+```
+raw_movies
+```
+
+Example data:
+
+```
+movie_id | title        | rating
+1        | Avatar       | 4
+2        | Titanic      | 5
+```
+
+Data may come from:
+
+* CSV files
+* APIs
+* application databases
+
+Example pipeline:
+
+```
+CSV file → Snowflake raw table
+```
+
+Why important:
+
+If transformations fail later, you can **reload data from raw layer**.
+
+---
+
+# 2. Staging Layer
+
+Purpose:
+Do **basic cleaning and formatting**.
+
+Typical operations:
+
+* rename columns
+* fix data types
+* remove null values
+* standardize formats
+
+Example DBT model:
+
+```sql
+SELECT
+    movie_id,
+    title,
+    rating
+FROM raw_movies
+WHERE rating IS NOT NULL
+```
+
+Creates table:
+
+```
+stg_movies
+```
+
+Example result:
+
+```
+movie_id | title   | rating
+1        | Avatar  | 4
+2        | Titanic | 5
+```
+
+Think of staging as **cleaning the raw data**.
+
+---
+
+# 3. Warehouse Layer
+
+Purpose:
+Combine and transform data into **business logic tables**.
+
+Typical operations:
+
+* joins
+* aggregations
+* calculations
+
+Example:
+
+```
+stg_movies
+stg_ratings
+```
+
+DBT model:
+
+```sql
+SELECT
+    movie_id,
+    AVG(rating) AS avg_rating
+FROM stg_ratings
+GROUP BY movie_id
+```
+
+Creates table:
+
+```
+movie_avg_rating
+```
+
+Example output:
+
+```
+movie_id | avg_rating
+1        | 4.2
+2        | 4.7
+```
+
+This layer creates **structured analytics tables**.
+
+---
+
+# 4. Mart Layer (Analytics Layer)
+
+Purpose:
+Create **final tables used by dashboards and analysts**.
+
+These are **business-ready datasets**.
+
+Example:
+
+```
+top_movies
+```
+
+DBT model:
+
+```sql
+SELECT *
+FROM movie_avg_rating
+WHERE avg_rating > 4
+```
+
+Output:
+
+```
+movie_id | avg_rating
+1        | 4.2
+2        | 4.7
+```
+
+These tables are used by tools like:
+
+* dashboards
+* reports
+* machine learning models
+
+Example connection:
+
+```
+Snowflake → Power BI dashboard
+```
+
+---
+
+# Simple Full Flow
+
+```
+Landing (raw data)
+      ↓
+Staging (clean data)
+      ↓
+Warehouse (business transformations)
+      ↓
+Mart (analytics tables)
+```
+
+Example pipeline:
+
+```
+CSV dataset
+   ↓
+raw_movies
+   ↓
+stg_movies
+   ↓
+movie_avg_rating
+   ↓
+top_movies_dashboard
+```
+
+---
+
+# Quick Memory Trick
+
+```
+Landing  → raw storage
+Staging  → cleaning
+Warehouse → transformations
+Mart → analytics output
+```
+
+

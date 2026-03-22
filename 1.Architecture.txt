@@ -1,0 +1,550 @@
+1.Architecture
+
+---
+
+# 1. Project Goal (What We Are Building)
+
+We will build a **Netflix data analysis pipeline**.
+
+Tools used:
+
+• Amazon Web Services (S3)
+• Snowflake
+• dbt (Data Build Tool)
+
+Architecture:
+
+```
+Netflix dataset
+      ↓
+Amazon S3
+      ↓
+Snowflake (raw tables)
+      ↓
+DBT transformations
+      ↓
+Clean tables
+      ↓
+Power BI / Tableau dashboards
+```
+
+Purpose:
+
+```
+Build a full data pipeline + analytics model
+```
+
+This is a **real-world analytics engineering workflow**.
+
+---
+
+# 2. Step-by-Step Architecture
+
+### Step 1 — Extract Data
+
+Data source:
+
+```
+MovieLens dataset
+```
+
+(similar to Netflix data)
+
+Format:
+
+```
+CSV file
+```
+
+Example:
+
+```
+movies.csv
+ratings.csv
+users.csv
+```
+
+Purpose:
+
+```
+Raw data for analysis
+```
+
+---
+
+### Step 2 — Upload to S3
+
+We upload CSV to:
+
+```
+Amazon S3 bucket
+```
+
+Example:
+
+```
+s3://netflix-project/movies.csv
+```
+
+Purpose:
+
+```
+Cloud storage for raw data
+```
+
+Why companies do this:
+
+• cheap storage
+• scalable
+• easy ingestion into warehouses
+
+---
+
+### Step 3 — Load into Snowflake
+
+Data is loaded from S3 into Snowflake tables.
+
+Example:
+
+```
+raw.movies
+raw.ratings
+raw.users
+```
+
+This layer is called:
+
+```
+RAW / Landing zone
+```
+
+Purpose:
+
+```
+Store original untouched data
+```
+
+Important rule in companies:
+
+```
+Never modify raw data
+```
+
+Always keep original version.
+
+---
+
+# 3. Database Structure (Very Important)
+
+The instructor divides database into two sections.
+
+### 1️⃣ Raw Zone
+
+Example:
+
+```
+RAW.movies
+RAW.ratings
+```
+
+Purpose:
+
+```
+original data
+```
+
+No transformations.
+
+---
+
+### 2️⃣ Staging Zone
+
+Example:
+
+```
+STAGING.movies_clean
+STAGING.ratings_clean
+```
+
+Purpose:
+
+```
+clean data
+```
+
+Example transformations:
+
+• remove nulls
+• rename columns
+• fix datatypes
+
+---
+
+### 3️⃣ Development / Analytics Zone
+
+Example:
+
+```
+ANALYTICS.movie_popularity
+ANALYTICS.top_rated_movies
+```
+
+Purpose:
+
+```
+business analysis tables
+```
+
+Used by:
+
+• dashboards
+• ML models
+• reports
+
+---
+
+Full pipeline:
+
+```
+Raw data
+   ↓
+Staging tables
+   ↓
+Analytics tables
+```
+
+---
+
+# 4. Where DBT Fits
+
+This is the most important concept.
+
+DBT **only handles transformation**.
+
+DBT does NOT do:
+
+❌ data extraction
+❌ data ingestion
+
+DBT does:
+
+```
+SQL transformations
+```
+
+Example:
+
+Raw table:
+
+```
+raw.ratings
+```
+
+DBT model:
+
+```sql
+SELECT movie_id,
+       AVG(rating) AS avg_rating
+FROM raw.ratings
+GROUP BY movie_id
+```
+
+DBT creates table:
+
+```
+analytics.movie_ratings
+```
+
+So DBT = **SQL transformation engine**.
+
+---
+
+# 5. Data Engineering Lifecycle
+
+Every data pipeline has 3 steps.
+
+### 1️⃣ Ingestion
+
+Collect data.
+
+Examples:
+
+• APIs
+• databases
+• applications
+
+Tools:
+
+• Kafka
+• Airbyte
+• Fivetran
+
+---
+
+### 2️⃣ Transformation
+
+Clean and structure data.
+
+Examples:
+
+• remove duplicates
+• join tables
+• calculate metrics
+
+Tools:
+
+• DBT
+• Spark
+• SQL
+
+---
+
+### 3️⃣ Serving
+
+Provide data for use.
+
+Examples:
+
+• dashboards
+• machine learning
+• analytics
+
+Tools:
+
+• Power BI
+• Tableau
+• Looker
+
+---
+
+Pipeline summary:
+
+```
+Ingestion → Transformation → Serving
+```
+
+---
+
+# 6. ETL vs ELT (Super Important)
+
+Old architecture:
+
+### ETL
+
+```
+Extract
+Transform
+Load
+```
+
+Example:
+
+```
+source
+   ↓
+transform in Spark
+   ↓
+load into warehouse
+```
+
+Transformation happens **before warehouse**.
+
+---
+
+Modern architecture:
+
+### ELT
+
+```
+Extract
+Load
+Transform
+```
+
+Example:
+
+```
+source
+   ↓
+load raw data into warehouse
+   ↓
+transform inside warehouse
+```
+
+Transformation happens **inside warehouse**.
+
+DBT works with:
+
+```
+ELT
+```
+
+---
+
+# 7. Why ELT Became Popular
+
+Because modern warehouses like:
+
+• Snowflake
+• Google BigQuery
+• Amazon Redshift
+
+are **extremely powerful**.
+
+They can process huge data directly.
+
+So instead of using Spark pipelines:
+
+```
+just load raw data
+then run SQL transformations
+```
+
+This is exactly what DBT does.
+
+---
+
+# 8. DBT Features (What It Can Do)
+
+Inside DBT you can do many things.
+
+### 1️⃣ Models
+
+SQL transformations.
+
+Example:
+
+```
+models/movie_ratings.sql
+```
+
+---
+
+### 2️⃣ Snapshots
+
+Track changes in data over time.
+
+Example:
+
+```
+price changes
+user subscription changes
+```
+
+---
+
+### 3️⃣ Tests
+
+Check data quality.
+
+Example:
+
+```
+rating should not be NULL
+user_id should be unique
+```
+
+---
+
+### 4️⃣ Documentation
+
+DBT auto-generates data documentation.
+
+Example:
+
+```
+table description
+column meaning
+lineage graph
+```
+
+---
+
+### 5️⃣ Macros
+
+Reusable SQL functions.
+
+Example:
+
+```
+calculate revenue
+calculate retention
+```
+
+---
+
+### 6️⃣ Version Control
+
+Using:
+
+```
+Git
+```
+
+Track code changes.
+
+---
+
+# 9. Where DBT Sits in Architecture
+
+Example real architecture:
+
+```
+Applications
+   ↓
+Kafka ingestion
+   ↓
+Data lake / storage
+   ↓
+Data warehouse
+   ↓
+DBT transformations
+   ↓
+Analytics
+```
+
+So DBT works **after data warehouse**.
+
+---
+
+# 10. Real Company Example
+
+Example pipeline:
+
+```
+Netflix user activity
+   ↓
+S3 storage
+   ↓
+Snowflake raw tables
+   ↓
+DBT transformations
+   ↓
+Power BI dashboards
+```
+
+DBT builds:
+
+```
+watch_time
+top_movies
+user_engagement
+```
+
+analytics tables.
+
+---
+
+# 11. One Sentence Summary
+
+DBT is a tool that **transforms raw warehouse data into clean analytics tables using SQL**.
+
+---
+
+# Important (This Will Help You A LOT)
+
+Your confusion earlier was because the previous instructor **jumped directly into commands**.
+
+This one is explaining the **data engineering context first**, which is correct.
+
+

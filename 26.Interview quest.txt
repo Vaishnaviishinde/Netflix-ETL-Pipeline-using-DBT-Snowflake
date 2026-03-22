@@ -1,0 +1,540 @@
+26.Interview quest
+
+
+
+---
+
+# 🎯 “Explain Your DBT Project” (Pro-Level Answer)
+
+In my project, I built an end-to-end data transformation pipeline using DBT on top of a data warehouse. The goal was to convert raw data into clean, analytics-ready tables while ensuring data quality, traceability, and scalability.
+
+---
+
+# 🧩 1. Overall Architecture / Flow
+
+The pipeline follows a layered architecture:
+
+```
+raw → staging (src_) → intermediate → marts (dim + fact)
+```
+
+* **Raw layer**: data already exists in warehouse (ingested externally)
+* **Staging (src_)**: cleaning and standardization
+* **Intermediate**: joins / transformations (optional)
+* **Marts**:
+
+  * **dim tables** → descriptive data
+  * **fact tables** → transactional/metrics data
+
+---
+
+# 🗂️ 2. Data Ingestion (Sources + Seeds)
+
+## Sources
+
+I defined raw tables using `source()` in a YAML file.
+
+```sql
+SELECT * FROM {{ source('netflix','movies') }}
+```
+
+This helps with:
+
+* tracking raw data
+* adding freshness checks
+* documentation
+
+---
+
+## Seeds
+
+I used seeds to load small static datasets like movie release dates.
+
+```bash
+dbt seed
+```
+
+These CSV files are converted into tables and used in transformations.
+
+---
+
+# 🔄 3. Transformations (Models)
+
+All transformations are written as SQL models.
+
+## Staging Layer
+
+* cleans raw data
+* renames columns
+* standardizes formats
+
+Example:
+
+```sql
+SELECT movie_id, title, genres
+FROM {{ source('netflix','movies') }}
+```
+
+---
+
+## Dimension Tables
+
+Example: `dim_movies`
+
+* unique movie data
+* cleaned attributes
+
+```sql
+SELECT * FROM {{ ref('src_movies') }}
+```
+
+---
+
+## Fact Tables
+
+Example: `fct_ratings`
+
+* transactional data (user ratings)
+
+```sql
+SELECT * FROM {{ ref('src_ratings') }}
+```
+
+---
+
+## Materializations used
+
+* staging → views
+* dimension → tables
+* large fact → incremental (for performance)
+
+---
+
+# ⚡ 4. Incremental Processing
+
+For large datasets, I used incremental models.
+
+* loads only new data
+* improves performance
+* avoids full refresh
+
+---
+
+# 🧪 5. Data Testing
+
+I implemented both **generic** and **custom tests**.
+
+## Generic Tests (in YAML)
+
+* not_null
+* unique
+* relationships
+* accepted_values
+
+Example:
+
+```yaml
+- name: movie_id
+  tests:
+    - not_null
+    - unique
+```
+
+---
+
+## Custom (Singular) Tests
+
+Example:
+
+```sql
+SELECT *
+FROM {{ ref('fct_genome_scores') }}
+WHERE relevance_score < 0
+```
+
+Ensures:
+
+* no invalid values
+* business rules are enforced
+
+---
+
+# 📸 6. Snapshots (SCD Type 2)
+
+I used DBT snapshots to track historical changes.
+
+* captures changes over time
+* maintains history using:
+
+  * dbt_valid_from
+  * dbt_valid_to
+
+Example use case:
+If a tag changes → old record closed, new record created
+
+Command:
+
+```bash
+dbt snapshot
+```
+
+---
+
+# 🧠 7. Macros
+
+I used macros to reuse logic and avoid repetition.
+
+Example:
+
+```sql
+{{ dbt_utils.generate_surrogate_key(['user_id','movie_id']) }}
+```
+
+Use cases:
+
+* surrogate keys
+* reusable SQL logic
+* dynamic queries
+
+---
+
+# 📦 8. Packages
+
+Used `dbt_utils` package for:
+
+* surrogate key generation
+* utility functions
+
+Installed via:
+
+```bash
+dbt deps
+```
+
+---
+
+# 🔗 9. Data Lineage
+
+Using `ref()` and `source()`, DBT automatically builds lineage.
+
+Example flow:
+
+```
+source → src_movies → dim_movies → fct_ratings
+```
+
+This helps in:
+
+* debugging
+* impact analysis
+* understanding dependencies
+
+---
+
+# 📚 10. Documentation
+
+I created documentation using schema.yml.
+
+Command:
+
+```bash
+dbt docs generate
+dbt docs serve
+```
+
+This provides:
+
+* column descriptions
+* model relationships
+* lineage graph
+
+---
+
+# 🚀 11. Execution
+
+* `dbt run` → runs models
+* `dbt test` → runs tests
+* `dbt snapshot` → updates history
+* `dbt seed` → loads CSV data
+* `dbt build` → runs everything together (used in production)
+
+---
+
+# 🏢 12. Real-World Impact
+
+This project ensures:
+
+* clean, reliable data
+* automated transformations
+* strong data quality checks
+* scalable pipeline design
+* easy onboarding via documentation
+
+---
+
+# 🧠 1-Line Closing (VERY IMPORTANT)
+
+“This project demonstrates how DBT can be used to build a scalable, testable, and well-documented data pipeline from raw data to business-ready insights.”
+
+-------
+
+
+easy onboarding via documentation
+
+🧠 1-Line Closing (VERY IMPORTANT)
+
+“This project demonstrates how DBT can be used to build a scalable, testable, and well-documented data pipeline from raw data to business-ready insights.”
+
+If you want next:
+I can turn this into a 2-minute crisp answer, or grill you with panel-style cross questions based on THIS exact explanation (very helpful).
+
+yes 
+
+Perfect. Let’s do this like a real panel. I’ll ask tough, slightly aggressive, scenario-based questions based on your project, and give you strong answers you should aim for.
+
+🎯 Panel-Style DBT Interview (Based on YOUR Project)
+1. “Why did you use DBT? Why not just write SQL in Snowflake?”
+Answer:
+
+DBT provides structure, testing, and maintainability on top of SQL.
+
+In Snowflake, I can write queries, but:
+
+no dependency management
+
+no built-in testing
+
+no version-controlled transformations
+
+With DBT:
+
+models are modular using ref()
+
+testing ensures data quality
+
+lineage helps understand dependencies
+
+documentation is auto-generated
+
+So DBT turns raw SQL into a production-grade pipeline.
+
+2. “Explain your end-to-end pipeline in 30 seconds.”
+Answer:
+
+Raw data comes from warehouse tables defined using source().
+
+I clean and standardize it in staging models (src_).
+Then I build dimension tables like dim_movies and fact tables like fct_ratings using ref().
+
+I also use seeds for static data like release dates.
+Data quality is ensured using DBT tests.
+Snapshots track historical changes.
+Finally, everything is documented and visualized using DBT docs and lineage graph.
+
+3. “What happens if one of your upstream models fails?”
+Answer:
+
+DBT uses dependency graph via ref().
+
+If an upstream model fails:
+
+downstream models will not run
+
+DBT stops execution for dependent nodes
+
+This prevents bad data from propagating further.
+
+4. “How do you ensure data quality in your pipeline?”
+Answer:
+
+I use DBT tests at multiple levels:
+
+Generic tests:
+
+not_null
+
+unique
+
+relationships
+
+Custom tests:
+
+business logic (e.g., relevance_score > 0)
+
+In production, we run dbt build, which ensures:
+
+data is built
+
+validated before use
+
+5. “Why did you use incremental models?”
+Answer:
+
+Incremental models improve performance by processing only new or updated data.
+
+Instead of rebuilding entire tables:
+
+we filter new records using conditions
+
+reduces compute cost
+
+faster execution for large datasets
+
+Used mainly in fact tables with large volume.
+
+6. “What is the difference between ref() and source() in your project?”
+Answer:
+
+source() is used for raw tables from warehouse
+
+ref() is used for DBT models
+
+source() helps with:
+
+freshness checks
+
+raw data tracking
+
+ref() helps with:
+
+dependency management
+
+lineage building
+
+7. “How do snapshots work? Explain with your example.”
+Answer:
+
+Snapshots track historical changes using SCD Type 2.
+
+In my project:
+
+I created a snapshot on tags table
+
+used timestamp strategy
+
+When data changes:
+
+old record gets dbt_valid_to
+
+new record is inserted with new timestamp
+
+This helps track how data changed over time.
+
+8. “Why not use snapshots everywhere?”
+Answer:
+
+Snapshots are expensive and used only when history is required.
+
+Not all tables need historical tracking.
+Only dimension-like tables with changing attributes require snapshots.
+
+9. “What is data lineage and why is it important?”
+Answer:
+
+Data lineage shows how data flows from source to final models.
+
+In DBT:
+
+built automatically using ref() and source()
+
+Importance:
+
+debugging issues
+
+impact analysis
+
+understanding dependencies
+
+10. “What is the use of seeds in your project?”
+Answer:
+
+Seeds are used to load static data from CSV into warehouse.
+
+In my project:
+
+used for movie release dates
+
+Benefits:
+
+quick ingestion
+
+no external pipeline needed
+
+easily version controlled
+
+11. “Why do we write descriptions in schema.yml?”
+Answer:
+
+Descriptions help document models and columns.
+
+They are used in DBT docs to:
+
+explain business meaning
+
+help new team members understand data
+
+improve data discoverability
+
+12. “What is dbt build and why is it important?”
+Answer:
+
+dbt build runs:
+
+models
+
+tests
+
+seeds
+
+snapshots
+
+It ensures:
+
+data is created
+
+validated
+
+ready for use
+
+It is used in production pipelines.
+
+13. “What happens if a test fails?”
+Answer:
+
+If a test fails:
+
+DBT marks it as failure
+
+in production pipelines, execution may stop
+
+This prevents bad data from being used downstream.
+
+14. “How would you debug a wrong value in your final table?”
+Answer:
+
+I would use lineage graph:
+
+trace back from fact → dim → staging → source
+
+Then:
+
+check transformations at each layer
+
+validate joins and filters
+
+verify source data
+
+15. “Why is DBT better than traditional ETL tools?”
+Answer:
+
+DBT focuses on transformation layer with:
+
+SQL-based approach
+
+modular design
+
+version control
+
+testing + documentation
+
+Traditional ETL tools are heavier and less flexible for analytics workflows.

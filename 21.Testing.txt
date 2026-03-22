@@ -1,0 +1,468 @@
+21.Testing 
+
+### DBT Testing — Simple, Clear Notes (with real examples)
+
+---
+
+## 1. What is Testing in DBT?
+
+Testing = **checking data quality automatically**
+
+Before data is used in dashboards or reports, DBT makes sure:
+
+* no missing values
+* no duplicates
+* correct relationships
+* valid values
+
+**Simple example:**
+
+* user_id should not be NULL
+* movie_id should exist in dim_movies
+* rating should not be negative
+
+---
+
+## 2. Types of Tests
+
+### A. Generic Tests (pre-built, reusable)
+
+These are ready-made checks you just configure in `.yml`
+
+#### 1. `not_null`
+
+Column should not have NULLs
+Example:
+
+```yml
+- name: user_id
+  tests:
+    - not_null
+```
+
+#### 2. `unique`
+
+No duplicates allowed
+Example:
+
+```yml
+- name: user_id
+  tests:
+    - unique
+```
+
+#### 3. `relationships`
+
+Foreign key check (VERY IMPORTANT in real projects)
+
+Example:
+
+```yml
+- name: movie_id
+  tests:
+    - relationships:
+        to: ref('dim_movies')
+        field: movie_id
+```
+
+Meaning:
+→ Every `movie_id` in this table must exist in `dim_movies`
+
+#### 4. `accepted_values`
+
+Only allowed values
+
+Example:
+
+```yml
+- name: status
+  tests:
+    - accepted_values:
+        values: ['active', 'inactive']
+```
+
+---
+
+### B. Singular Tests (custom SQL)
+
+You write your own logic
+
+Example:
+
+```sql
+SELECT *
+FROM fct_genome_scores
+WHERE relevance_score < 0
+```
+
+If rows return → test FAIL
+If no rows → test PASS
+
+---
+
+## 3. Real Company-Level Use Cases (Important)
+
+These are actually used in production 👇
+
+### Case 1: Revenue should never be negative
+
+```sql
+SELECT *
+FROM fact_sales
+WHERE revenue < 0
+```
+
+### Case 2: Duplicate orders (critical bug)
+
+```yml
+- name: order_id
+  tests:
+    - unique
+```
+
+### Case 3: Foreign key validation (joins won’t break)
+
+```yml
+- name: customer_id
+  tests:
+    - relationships:
+        to: ref('dim_customers')
+        field: customer_id
+```
+
+### Case 4: Data range validation
+
+```sql
+SELECT *
+FROM fct_genome_scores
+WHERE relevance_score > 1 OR relevance_score < 0
+```
+
+### Case 5: Business rule validation
+
+Example: rating must be between 1–5
+
+```sql
+SELECT *
+FROM fct_ratings
+WHERE rating NOT BETWEEN 1 AND 5
+```
+
+---
+
+## 4. Your Given YAML — Easy Explanation
+
+```yml
+- name: fct_ratings
+  description: Fact table of user ratings for movies
+```
+
+→ This is your main ratings table
+
+---
+
+### Column 1:
+
+```yml
+- name: user_id
+  tests:
+    - not_null
+```
+
+✔ Every rating must have a user
+❌ If NULL → test fails
+
+---
+
+### Column 2:
+
+```yml
+- name: movie_id
+  tests:
+    - not_null
+    - relationships:
+        to: ref('dim_movies')
+        field: movie_id
+```
+
+Two checks:
+
+1. Not null
+2. Must exist in `dim_movies`
+
+✔ Ensures clean joins
+✔ Prevents broken analytics
+
+---
+
+### Column 3:
+
+```yml
+- name: rating
+  tests:
+    - not_null
+```
+
+✔ Every record must have rating
+
+---
+
+### Column 4:
+
+```yml
+- name: rating_timestamp
+```
+
+→ Only documentation (no test here)
+
+---
+
+## Second Table:
+
+```yml
+- name: fct_genome_scores
+```
+
+### movie_id
+
+✔ must exist
+✔ not null
+
+### tag_id
+
+✔ must exist
+✔ not null
+
+### relevance_score
+
+✔ must not be null
+(ideally you should also test range 0–1 → company-level improvement)
+
+---
+
+## 5. How DBT Runs Tests
+
+Command:
+
+```bash
+dbt test
+```
+
+What happens:
+
+* DBT runs all tests
+* If query returns rows → FAIL
+* If empty → PASS
+
+---
+
+## 6. Why Testing is VERY Important
+
+Without testing:
+
+* dashboards show wrong numbers
+* joins break
+* duplicates mess KPIs
+* business decisions become wrong
+
+With testing:
+
+* data is reliable
+* pipelines are safe
+* easier debugging
+
+---
+
+## 7. Key Understanding (Important)
+
+Think like this:
+
+| Thing         | Meaning                 |
+| ------------- | ----------------------- |
+| Generic test  | Ready-made validation   |
+| Singular test | Custom business logic   |
+| YAML file     | Where rules are defined |
+| dbt test      | Runs all validations    |
+
+---
+
+
+Why we write description in tests/YAML
+
+Helps others understand what the column means + business context (not just name).
+
+Used in DBT docs UI, so new engineers/analysts can trust and use data correctly.
+
+---
+
+🔥 DBT Testing — Hard, Scenario-Based Interview Questions (with Answers)
+1. Duplicate Issue Even After unique Test
+
+Scenario:
+You applied unique test on order_id, but test is failing. Business says duplicates are valid for some cases (same order split into shipments).
+
+Question:
+How do you handle this without removing the test?
+
+Answer:
+
+Don’t blindly remove unique
+
+Understand grain of table
+
+Fix:
+
+Either:
+
+Change uniqueness to composite key
+
+tests:
+  - unique:
+      column_name: (order_id, shipment_id)
+
+OR create custom singular test to allow valid duplicates
+
+Concept tested: Grain understanding + not blindly trusting tests
+
+2. Relationship Test Passing but Data Still Wrong
+
+Scenario:
+movie_id relationship test passes (exists in dim_movies), but reports show incorrect joins.
+
+Question:
+Why can this happen?
+
+Answer:
+
+Relationship test only checks existence, not correctness
+
+Possible issues:
+
+Wrong mapping (movie_id reused incorrectly)
+
+Duplicate keys in dim table
+
+Slowly changing dimension issue (multiple versions)
+
+Fix:
+
+Add:
+
+unique test on dim_movies.movie_id
+
+Or filter only latest records (SCD2 active rows)
+
+Concept tested: Limitations of relationship test
+
+3. Test Passing But Business Logic Still Wrong
+
+Scenario:
+All tests pass (not_null, unique), but revenue dashboard is incorrect.
+
+Question:
+Why didn’t DBT catch it?
+
+Answer:
+
+DBT tests are data quality checks, not business logic validation
+
+Fix:
+
+Add custom singular tests
+Example:
+
+SELECT *
+FROM fact_sales
+WHERE revenue != quantity * price
+
+Concept tested: Difference between technical vs business validation
+
+4. Handling Late Arriving Data
+
+Scenario:
+You have incremental model. Late data comes with old timestamp → test passes, but data missing.
+
+Question:
+How do you catch this?
+
+Answer:
+
+Incremental logic skips old timestamps → data loss
+
+Fix:
+
+Add test:
+
+SELECT *
+FROM source_table
+WHERE timestamp < (SELECT MAX(timestamp) FROM target)
+
+Or adjust incremental logic (use merge strategy / updated_at logic)
+
+Concept tested: Testing for pipeline logic issues, not just data
+
+5. Accepted Values Test Failing in Production Suddenly
+
+Scenario:
+status column allowed values = ['active','inactive']
+Suddenly test fails in prod.
+
+Question:
+What should you do?
+
+Answer:
+DO NOT just update values blindly
+
+Steps:
+
+Check source system → new value introduced?
+
+Confirm with business → is it valid?
+
+Then:
+
+Update accepted_values OR
+
+Fix upstream data
+
+Concept tested: Data governance mindset
+
+6. Test Performance Issue on Large Table
+
+Scenario:
+dbt test is taking too long on large fact table (millions of rows)
+
+Question:
+How to optimize?
+
+Answer:
+
+Use:
+
+limit data in test
+
+filter recent data only
+
+WHERE created_at >= current_date - 7
+
+Use sampled testing
+
+Run tests on staging instead of full fact
+
+Concept tested: Scaling DBT in real-world
+
+---
+
+Quick Summary (what interviewer is checking)
+
+They are testing if you understand:
+
+Table grain vs uniqueness
+
+Difference between data quality & business logic
+
+Limitations of built-in tests
+
+Real-world issues (late data, scale, governance)
+
+When to use generic vs custom tests

@@ -1,0 +1,369 @@
+25.Other impt topics 
+
+---
+
+# 2. `ref()` vs `source()`
+
+## `ref()`
+
+### Syntax
+
+```sql
+SELECT * FROM {{ ref('dim_movies') }}
+```
+
+### What it does
+
+* References another DBT model
+* Creates dependency graph automatically
+* DBT decides execution order based on this
+
+### Example (your project)
+
+```sql
+SELECT * FROM {{ ref('fct_ratings') }}
+```
+
+This means:
+→ use the transformed table created inside DBT
+
+---
+
+## `source()`
+
+### Defined in YAML
+
+```yaml
+sources:
+  - name: netflix
+    schema: raw
+    tables:
+      - name: movies
+```
+
+### Used in SQL
+
+```sql
+SELECT * FROM {{ source('netflix','movies') }}
+```
+
+### What it does
+
+* Points to raw tables in warehouse
+* Adds metadata (freshness, tests, documentation)
+
+---
+
+## Key Difference
+
+| Feature    | ref()           | source()           |
+| ---------- | --------------- | ------------------ |
+| Layer      | DBT models      | Raw data           |
+| Defined in | SQL             | YAML               |
+| Purpose    | transformations | ingestion tracking |
+
+---
+
+## Real Company Usage
+
+* `source()` used in staging layer (src_)
+* `ref()` used everywhere else (dim, fact)
+
+Example flow:
+
+```sql
+-- staging
+SELECT * FROM {{ source('netflix','movies') }}
+
+-- dim
+SELECT * FROM {{ ref('src_movies') }}
+```
+
+---
+
+# 4. `dbt run` vs `dbt build`
+
+## dbt run
+
+```bash
+dbt run
+```
+
+### What it does
+
+* Runs only models
+* Creates tables/views
+
+---
+
+## dbt build
+
+```bash
+dbt build
+```
+
+### What it does
+
+Runs everything:
+
+* models
+* tests
+* seeds
+* snapshots
+
+---
+
+## Practical Example
+
+If you run:
+
+```bash
+dbt run
+```
+
+→ tables created but bad data may pass
+
+If you run:
+
+```bash
+dbt build
+```
+
+→ tables created + validated + tested
+
+---
+
+## Company Usage
+
+* Developers use `dbt run` for quick iteration
+* Production pipelines use `dbt build`
+
+---
+
+## Interview Insight
+
+Why `build` is better:
+→ ensures data quality + catches issues early
+
+---
+
+# 5. Seeds
+
+## What it is
+
+Load local CSV into warehouse as table
+
+---
+
+## Example CSV
+
+```csv
+movie_id,release_date
+1,2020-01-01
+2,2021-05-10
+```
+
+---
+
+## Command
+
+```bash
+dbt seed
+```
+
+---
+
+## Use in model
+
+```sql
+SELECT * FROM {{ ref('seed_movie_release_date') }}
+```
+
+---
+
+## What it does
+
+* Uploads CSV
+* Creates table automatically
+* Makes it usable like any DBT model
+
+---
+
+## Real Use Cases
+
+* country mapping
+* status codes
+* category lists
+
+---
+
+## Example (your project)
+
+```sql
+SELECT f.*, d.release_date
+FROM {{ ref('fct_ratings') }} f
+LEFT JOIN {{ ref('seed_movie_release_date') }} d
+ON f.movie_id = d.movie_id
+```
+
+---
+
+## Important Limitation
+
+* Not for large data
+* Only small static datasets
+
+---
+
+# 6. Data Lineage
+
+## What it is
+
+Graph showing data flow from source to final output
+
+---
+
+## Example (your project)
+
+```
+raw_movies → src_movies → dim_movies → fct_ratings
+```
+
+---
+
+## How DBT builds it
+
+* using `ref()`
+* using `source()`
+
+---
+
+## Why it matters
+
+### Debugging
+
+If `fct_ratings` wrong
+→ trace back to `dim_movies` or `src_movies`
+
+---
+
+### Impact Analysis
+
+Change `src_movies`?
+→ know all affected models
+
+---
+
+### Transparency
+
+Anyone can understand pipeline quickly
+
+---
+
+## Company Usage
+
+* essential in large data systems
+* used by analysts, engineers, data teams
+
+---
+
+# 8. Packages
+
+## What it is
+
+Reusable DBT code (like libraries)
+
+---
+
+## Setup
+
+### packages.yml
+
+```yaml
+packages:
+  - package: dbt-labs/dbt_utils
+```
+
+### Install
+
+```bash
+dbt deps
+```
+
+---
+
+## Example Usage
+
+### Generate surrogate key
+
+```sql
+{{ dbt_utils.generate_surrogate_key(['user_id','movie_id']) }}
+```
+
+---
+
+## What it does
+
+* combines columns
+* creates unique hash key
+* avoids manual logic
+
+---
+
+## Real Use Cases
+
+* surrogate keys
+* reusable tests
+* common transformations
+
+---
+
+## Example in your project
+
+Instead of writing:
+
+```sql
+user_id || movie_id
+```
+
+You use:
+
+```sql
+{{ dbt_utils.generate_surrogate_key(['user_id','movie_id']) }}
+```
+
+---
+
+## Why Companies Use Packages
+
+* saves time
+* reduces bugs
+* standardized logic
+* trusted community code
+
+---
+
+# Final Quick Understanding
+
+ref()
+→ connects DBT models
+
+source()
+→ connects raw tables
+
+dbt run
+→ runs models only
+
+dbt build
+→ runs full pipeline
+
+seed
+→ CSV to table
+
+lineage
+→ shows data flow
+
+packages
+→ reusable logic
+
+---

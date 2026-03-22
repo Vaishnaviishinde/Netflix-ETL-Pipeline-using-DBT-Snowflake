@@ -1,0 +1,272 @@
+22.Documentation 
+
+---
+
+## 1. What is DBT Documentation?
+
+DBT automatically creates a **website for your data project**
+This website shows:
+
+* tables (models, sources, snapshots)
+* columns + descriptions
+* tests applied
+* SQL logic
+* lineage (data flow)
+
+👉 Think of it like: **Google Maps for your data pipeline**
+
+---
+
+## 2. Commands (VERY IMPORTANT)
+
+### 1. Generate docs
+
+```bash
+dbt docs generate
+```
+
+**What it does:**
+
+* Reads all `.sql` + `.yml` files
+* Collects:
+
+  * models
+  * sources
+  * tests
+  * descriptions
+* Builds metadata (JSON files internally)
+
+---
+
+### 2. View docs
+
+```bash
+dbt docs serve
+```
+
+**What it does:**
+
+* Starts a **local web server**
+* Opens browser (localhost)
+* Shows full interactive documentation
+
+---
+
+## 3. Where does this data come from?
+
+Mainly from:
+
+* `schema.yml` → descriptions + tests
+* `sources.yml` → raw data info
+* SQL models → transformation logic
+
+---
+
+## 4. What you see in DBT Docs UI
+
+### A. Models / Tables
+
+Example:
+
+* dim_movies
+* fct_ratings
+
+You can click and see:
+
+* columns
+* descriptions
+* SQL query
+* tests
+
+---
+
+### B. Columns info
+
+Example:
+
+* movie_id → “primary key”
+* movie_title → “standardized name”
+
+👉 Comes from YAML descriptions
+
+---
+
+### C. Tests
+
+You’ll see:
+
+* not_null
+* unique
+* relationships
+
+👉 Helps understand data quality rules
+
+---
+
+### D. SQL Logic
+
+You can see:
+
+* full query used to build table
+  👉 very useful for debugging
+
+---
+
+### E. Lineage Graph (MOST IMPORTANT)
+
+This shows:
+
+* how tables are connected
+* which table depends on which
+
+Example flow:
+
+```
+raw_movies → src_movies → dim_movies → mart_movie
+```
+
+👉 One glance = full pipeline understanding
+
+---
+
+## 5. Why this is VERY SPECIAL (real value)
+
+### 1. Automatic Documentation
+
+No manual writing like Word/Confluence
+→ always up-to-date
+
+---
+
+### 2. Data Lineage (biggest advantage)
+
+* Shows full pipeline visually
+* Helps debugging instantly
+
+Example:
+“Why is this column wrong?”
+→ trace back to source in seconds
+
+---
+
+### 3. Onboarding becomes easy
+
+New engineer can:
+
+* open docs
+* understand entire system
+
+No dependency on seniors
+
+---
+
+### 4. Combines everything in ONE place
+
+Instead of:
+
+* SQL files
+* Excel docs
+* Wiki pages
+
+👉 DBT gives:
+
+* models + tests + docs + lineage together
+
+---
+
+### 5. Debugging becomes fast
+
+Example:
+
+* test failed → open docs → trace column → fix upstream
+
+---
+
+## 6. Common Mistakes (he kinda skipped clarity)
+
+### ❌ Wrong:
+
+```sql
+sources('netflix','movies')
+```
+
+### ✅ Correct:
+
+```sql
+source('netflix','movies')
+```
+
+---
+
+### ❌ Not writing descriptions
+
+→ docs become useless
+
+---
+
+### ❌ Not running generate before serve
+
+```bash
+dbt docs serve   ❌
+```
+
+```bash
+dbt docs generate
+dbt docs serve   ✅
+```
+
+---
+
+## 7. How Docs connect everything (Important)
+
+| Component    | Shows in Docs    |
+| ------------ | ---------------- |
+| models       | tables           |
+| sources      | raw tables       |
+| tests        | data quality     |
+| snapshots    | history tracking |
+| descriptions | column meaning   |
+
+---
+
+## 8. Real Example Flow (Your Project)
+
+In your project:
+
+```
+raw → src → dim → fact → mart
+```
+
+Docs will show:
+
+* raw_movies → src_movies
+* src_movies → dim_movies
+* dim_movies → fct_ratings
+
+👉 Full pipeline in one graph
+
+---
+
+## 9. Filtering & Exploring (UI features)
+
+You can:
+
+* search models
+* filter:
+
+  * only sources
+  * only models
+* isolate specific pipeline
+
+Example:
+
+* view only dim tables
+* hide snapshots
+
+---
+
+## 10. One-line Summary
+
+DBT Docs =
+**Auto-generated + always updated + visual + full data understanding system**
+

@@ -1,0 +1,259 @@
+7.Stagging
+
+---
+
+# 1. First Understand the Real Situation
+
+Your data is **not inside Snowflake**.
+
+It is inside **AWS S3**.
+
+Example file location:
+
+```
+AWS S3 Bucket
+movies.csv
+ratings.csv
+tags.csv
+```
+
+Snowflake **cannot automatically read files from S3 unless you connect it**.
+
+So first step = **create connection between Snowflake and S3**.
+
+---
+
+# 2. What is a Stage?
+
+A **Stage is just a pointer (connection) to a storage location**.
+
+Think of it like this:
+
+```
+Snowflake -----> S3 bucket
+        (stage connection)
+```
+
+The stage tells Snowflake:
+
+> “My files are in this S3 location.”
+
+Example stage:
+
+```sql
+CREATE STAGE netflixstage
+URL='s3://netflix-movie-data'
+```
+
+Meaning:
+
+```
+Snowflake → knows where files exist
+```
+
+Stage **does not store data**.
+It only stores the **path to the files**.
+
+---
+
+# 3. Why Not Load Directly?
+
+Good question.
+
+Because Snowflake needs to know:
+
+1. **Where files are**
+2. **How to access them**
+3. **What format they are**
+
+The stage stores this information.
+
+Without stage Snowflake doesn't know:
+
+```
+which bucket?
+which file?
+what permissions?
+```
+
+---
+
+# 4. Why Create Tables First?
+
+Because Snowflake must know **how the data should look**.
+
+Example CSV file:
+
+```
+movieId,title,genres
+1,Toy Story,Animation
+2,Jumanji,Adventure
+```
+
+Snowflake must know column types:
+
+```sql
+CREATE TABLE raw_movies (
+movieId INTEGER,
+title STRING,
+genres STRING
+);
+```
+
+Now Snowflake knows:
+
+```
+movieId → number
+title → text
+genres → text
+```
+
+---
+
+# 5. Then COPY Command Loads Data
+
+Now Snowflake reads file from S3 and loads into table.
+
+```sql
+COPY INTO raw_movies
+FROM '@netflixstage/movies.csv'
+```
+
+Flow:
+
+```
+S3 file
+   ↓
+Snowflake stage
+   ↓
+COPY command
+   ↓
+Snowflake table
+```
+
+---
+
+# 6. Full Pipeline (Very Important)
+
+Real pipeline looks like this:
+
+```
+Application
+     ↓
+AWS S3 (raw files)
+     ↓
+Snowflake Stage
+     ↓
+COPY command
+     ↓
+Raw Tables
+     ↓
+dbt transforms data
+     ↓
+Analytics tables
+     ↓
+Dashboard
+```
+
+---
+
+# 7. Why Raw Tables?
+
+Companies never directly use raw data.
+
+They create layers:
+
+```
+RAW → STAGING → MART
+```
+
+Example:
+
+### RAW
+
+Exact data from source.
+
+```
+raw_movies
+raw_ratings
+raw_tags
+```
+
+### STAGING (cleaned)
+
+```
+stg_movies
+stg_ratings
+```
+
+### MART (business tables)
+
+```
+movie_popularity
+top_rated_movies
+```
+
+---
+
+# 8. Why Not Auto Create Schema?
+
+Snowflake **can auto-detect**, but companies avoid it because:
+
+Problems:
+
+1. wrong datatype detection
+2. inconsistent schemas
+3. pipeline failures
+4. data corruption
+
+So engineers **explicitly define schema**.
+
+---
+
+# 9. Why AWS IAM User?
+
+Snowflake must access S3 securely.
+
+So AWS gives credentials:
+
+```
+Access Key
+Secret Key
+```
+
+These allow Snowflake to read files.
+
+This is controlled through **IAM permissions**.
+
+---
+
+# 10. Simplified Example
+
+Imagine:
+
+You have a **Google Drive folder** with files.
+
+But Excel wants to read them.
+
+Steps:
+
+1. Give Excel **link to folder** → Stage
+2. Define **table structure** → CREATE TABLE
+3. Import file → COPY
+
+Same concept.
+
+---
+
+# 11. What This Project Is Teaching
+
+This tutorial is basically showing:
+
+```
+S3 → Snowflake → dbt pipeline
+```
+
+Which is **a very common data engineering architecture**.
+
+---
+

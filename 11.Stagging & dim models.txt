@@ -1,0 +1,551 @@
+11.Stagging & dim models
+
+---
+
+# 1. What we are doing in this step
+
+We already had:
+
+Raw tables in Snowflake.
+
+Example
+
+```sql
+movielens.raw.raw_movies
+movielens.raw.raw_ratings
+movielens.raw.raw_tags
+```
+
+Now the goal is:
+
+Create **staging models for each raw table**.
+
+Architecture now becomes:
+
+```
+Raw tables (Snowflake)
+        ↓
+Staging models (DBT views)
+        ↓
+Dimension / Fact tables
+```
+
+So staging is basically **cleaned versions of raw tables**.
+
+---
+
+# 2. Creating staging models for all raw tables
+
+Inside:
+
+```
+models/staging
+```
+
+We create one model per raw table.
+
+Example files:
+
+```
+src_movies.sql
+src_ratings.sql
+src_tags.sql
+src_links.sql
+src_genome_tags.sql
+src_genome_scores.sql
+```
+
+Each model simply **selects data from raw tables**.
+
+Purpose:
+
+* keep raw untouched
+* clean naming
+* basic transformations
+
+---
+
+# 3. Example staging model (ratings)
+
+Example from your SQL:
+
+```sql
+WITH raw_ratings AS (
+  SELECT * 
+  FROM MOVIELENS.RAW.RAW_RATINGS
+)
+
+SELECT
+  userId AS user_id,
+  movieId AS movie_id,
+  rating,
+  TO_TIMESTAMP_LTZ(timestamp) AS rating_timestamp
+FROM raw_ratings
+```
+
+What this does:
+
+Step 1 — read raw data
+
+```
+MOVIELENS.RAW.RAW_RATINGS
+```
+
+Step 2 — rename columns
+
+```
+userId → user_id
+movieId → movie_id
+```
+
+Step 3 — convert timestamp format
+
+```
+timestamp → rating_timestamp
+```
+
+Typical staging tasks:
+
+* rename columns
+* clean data types
+* remove bad records
+* standardize format
+
+---
+
+# 4. Running all models
+
+Command:
+
+```
+dbt run
+```
+
+DBT then executes all models in `models/`.
+
+Example output:
+
+```
+Found 6 models
+Created view src_movies
+Created view src_ratings
+Created view src_tags
+Created view src_links
+Created view src_genome_tags
+Created view src_genome_scores
+```
+
+So DBT created **6 views in Snowflake**.
+
+---
+
+# 5. Result inside Snowflake
+
+After running DBT:
+
+```
+Views created:
+src_movies
+src_ratings
+src_tags
+src_links
+src_genome_tags
+src_genome_scores
+```
+
+All these are **views**, because staging folder is configured as:
+
+```
+materialized = view
+```
+
+So DBT created **views automatically**.
+
+---
+
+# 6. Why staging models exist (very important)
+
+We **never transform raw tables directly**.
+
+Correct architecture:
+
+```
+Raw tables
+    ↓
+Staging layer
+    ↓
+Transformations
+    ↓
+Analytics tables
+```
+
+Reasons:
+
+1. Raw remains untouched
+2. Easy debugging
+3. Clean transformation pipeline
+
+---
+
+# 7. Next step after staging
+
+After staging we build **data warehouse models**.
+
+Instructor introduced **Dimensional Modeling**.
+
+This is the classic warehouse design.
+
+Structure:
+
+```
+Fact tables
+Dimension tables
+```
+
+---
+
+# 8. What is a Fact Table
+
+Fact tables store **measurable events**.
+
+Example:
+
+```
+ratings
+orders
+sales
+transactions
+clicks
+```
+
+Example fact table:
+
+```
+fact_ratings
+----------------
+user_id
+movie_id
+rating
+timestamp
+```
+
+Facts usually contain **numbers or metrics**.
+
+---
+
+# 9. What is a Dimension Table
+
+Dimension tables describe the facts.
+
+Example:
+
+```
+movies
+users
+products
+date
+location
+```
+
+Example dimension table:
+
+```
+dim_movies
+----------------
+movie_id
+title
+genre
+year
+```
+
+Dimensions provide **context to facts**.
+
+---
+
+# 10. Visual example
+
+```
+        dim_movies
+           |
+           |
+fact_ratings -------- dim_users
+           |
+           |
+        dim_date
+```
+
+Fact table connects to multiple dimensions.
+
+This is called **Star Schema**.
+
+Very common in data warehouses.
+
+---
+
+# 11. DBT project architecture now
+
+Project structure becomes:
+
+```
+models
+ ├ staging
+ │   ├ src_movies.sql
+ │   ├ src_ratings.sql
+ │   ├ src_tags.sql
+ │
+ ├ dim
+ │   └ dim_movies.sql
+```
+
+So:
+
+```
+staging → views
+dim → tables
+```
+
+---
+
+# 12. Configuring materialization by folder
+
+Inside **dbt_project.yml**
+
+Example:
+
+```
+models:
+  netflix:
+    +materialized: view
+
+    dim:
+      +materialized: table
+```
+
+Meaning:
+
+```
+staging folder → views
+dim folder → tables
+```
+
+So DBT automatically knows:
+
+```
+src_movies → view
+dim_movies → table
+```
+
+---
+
+# 13. Creating the dim folder
+
+Inside models:
+
+```
+models
+ ├ staging
+ └ dim
+```
+
+Now create:
+
+```
+dim_movies.sql
+```
+
+---
+
+# 14. Referencing another model (core DBT feature)
+
+This is the **most important DBT feature**.
+
+Instead of writing:
+
+```
+SELECT * FROM movielens.raw.raw_movies
+```
+
+We reference another model.
+
+Syntax:
+
+```sql
+{{ ref('src_movies') }}
+```
+
+Example model:
+
+```sql
+WITH src_movies AS (
+
+SELECT *
+FROM {{ ref('src_movies') }}
+
+)
+
+SELECT *
+FROM src_movies
+```
+
+Meaning:
+
+Use the **output of src_movies model**.
+
+---
+
+# 15. Why `ref()` is powerful
+
+Without DBT:
+
+You manually manage dependencies.
+
+Example:
+
+```
+run query A
+then run query B
+then run query C
+```
+
+DBT automatically builds a **dependency graph**.
+
+Example:
+
+```
+src_movies
+      ↓
+dim_movies
+```
+
+So DBT knows:
+
+Run `src_movies` first
+Then run `dim_movies`
+
+This is called **DAG (Directed Acyclic Graph)**.
+
+---
+
+# 16. Transformation example in dim_movies
+
+Example transformations:
+
+```
+capitalize titles
+split genres
+rename columns
+```
+
+Example logic:
+
+```
+title → movie_title
+genres → genre_array
+```
+
+So dim table becomes a **clean structured dataset**.
+
+---
+
+# 17. Running DBT again
+
+Command:
+
+```
+dbt run
+```
+
+Output example:
+
+```
+Created view src_movies
+Created view src_ratings
+Created view src_tags
+Created table dim_movies
+```
+
+Notice difference:
+
+```
+staging models → views
+dim models → tables
+```
+
+---
+
+# 18. Final architecture now
+
+```
+Snowflake Raw Tables
+        ↓
+DBT Staging Views
+        ↓
+DBT Dimension Tables
+        ↓
+Fact Tables (later)
+        ↓
+Dashboards / Analytics
+```
+
+---
+
+# 19. Very important takeaway from this lecture
+
+Three major DBT concepts appeared here:
+
+### 1. Models
+
+SQL files that transform data.
+
+### 2. Materialization
+
+How results are stored:
+
+```
+view
+table
+incremental
+```
+
+### 3. ref()
+
+Allows one model to depend on another model.
+
+This builds the **DBT dependency graph**.
+
+---
+
+# 20. One thing the instructor didn't clearly say (but very important)
+
+Real DBT projects usually look like this:
+
+```
+models
+ ├ staging
+ ├ intermediate
+ ├ marts
+ │   ├ dim
+ │   └ fact
+```
+
+Example pipeline:
+
+```
+Raw data
+   ↓
+Staging views
+   ↓
+Intermediate transformations
+   ↓
+Dimension tables
+   ↓
+Fact tables
+   ↓
+BI dashboards
+```
+
+This is how **Netflix / Airbnb / Uber style pipelines are structured**.
+
+---
+
+

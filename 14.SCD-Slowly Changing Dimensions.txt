@@ -1,0 +1,158 @@
+14.SCD-Slowly Changing Dimensions
+
+**1. Fact vs Dimension tables**
+
+Fact tables
+
+* Store measurable values (numbers).
+* Examples: quantity, price, revenue, relevance score.
+
+Dimension tables
+
+* Store descriptive attributes.
+* Examples: user name, city, product name, category.
+
+Example
+
+| user_id | city     |
+| ------- | -------- |
+| 101     | New York |
+
+City is a **dimension attribute**.
+
+---
+
+### 2. Slowly Changing Dimensions (SCD)
+
+Dimension values usually **change slowly over time**, not frequently.
+
+Examples
+
+* User changes city
+* Product description updated
+* Customer address changed
+
+Handling these changes in a data warehouse is called **Slowly Changing Dimensions (SCD)**.
+
+---
+
+# SCD Types
+
+### SCD Type 1 – Overwrite
+
+Old value is **replaced by new value**.
+
+Example
+
+Before
+
+| user_id | city     |
+| ------- | -------- |
+| 101     | New York |
+
+After change
+
+| user_id | city       |
+| ------- | ---------- |
+| 101     | New Jersey |
+
+Problem
+
+* Old history is lost.
+
+---
+
+### SCD Type 2 – Keep Full History
+
+Instead of updating the row, **add a new row**.
+
+Example
+
+| user_id | city       | is_active |
+| ------- | ---------- | --------- |
+| 101     | New York   | false     |
+| 101     | New Jersey | true      |
+
+Benefits
+
+* History is preserved.
+
+Common ways to track current row:
+
+1. **is_active column**
+2. **version number**
+3. **start_date / end_date**
+
+Example with dates
+
+| user_id | city       | start_date | end_date |
+| ------- | ---------- | ---------- | -------- |
+| 101     | New York   | 2020       | 2022     |
+| 101     | New Jersey | 2022       | NULL     |
+
+NULL means **current active record**.
+
+---
+
+### SCD Type 3 – Partial History
+
+Only keep **current value + previous value**.
+
+Example
+
+| user_id | current_city | previous_city |
+| ------- | ------------ | ------------- |
+| 101     | New Jersey   | New York      |
+
+Only one level of history is stored.
+
+---
+
+### SCD Type 6 – Hybrid
+
+Combination of Type 1, Type 2, and Type 3.
+
+May include:
+
+* current value
+* previous value
+* start/end dates
+* active flag
+
+Used in complex data warehouses.
+
+---
+
+# Why this is difficult normally
+
+Without tools, engineers must manually write logic to:
+
+* check existing records
+* detect changes
+* insert new rows
+* update flags or dates
+
+This becomes complicated when there are **hundreds of tables**.
+
+---
+
+# How DBT helps
+
+DBT simplifies this using:
+
+1. **Incremental models**
+
+   * Only process **new or changed data**.
+
+2. **Snapshots**
+
+   * Automatically track **SCD Type 2 history**.
+
+So DBT can maintain history **without writing complex SQL logic manually**.
+
+---
+
+**Simple idea to remember**
+
+Dimension values change slowly →
+We use **SCD methods to track those changes over time**.
